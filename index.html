@@ -430,13 +430,16 @@ footer .gradient {
     </p>
 
     <div style="margin-top:16px">
-      <label>自訂房號（可留空自動產生）</label>
-      <input type="text" id="rps-room-input" placeholder="例如：派對包廂 🎉 或留空" maxlength="40">
-      <div class="muted" style="margin-top:4px">支援中文、emoji、空格。留空按「開房」會自動給你一串</div>
+      <label>房號（你自己決定）</label>
+      <input type="text" id="rps-room-input" placeholder="例如：派對包廂 🎉" maxlength="40" autocomplete="off">
+      <div class="muted" style="margin-top:4px">
+        開房的人自己決定房號，然後把房號告訴朋友。<br>
+        中文、英文、數字、emoji、空格、符號都可以。
+      </div>
     </div>
 
     <div class="btn-row">
-      <button class="btn primary" id="rps-host-btn">🏠 開房</button>
+      <button class="btn primary" id="rps-host-btn">🏠 開房（用上面的房號）</button>
       <button class="btn" id="rps-join-btn">🚪 加入朋友的房間</button>
     </div>
 
@@ -833,10 +836,11 @@ async function rpsJoin(roomName) {
 
 /* RPS Event bindings */
 rpsEls.hostBtn.addEventListener('click', () => {
-  let name = rpsEls.roomInput.value.trim();
+  const name = rpsEls.roomInput.value.trim();
   if (!name) {
-    name = '房間-' + randomCode(5);
-    rpsEls.roomInput.value = name;
+    setStatus(rpsEls.statusRow, '⚠️ 請自己輸入一個房號（任何字元都可以）', 'err');
+    rpsEls.roomInput.focus();
+    return;
   }
   rpsHost(name);
 });
