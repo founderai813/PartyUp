@@ -783,12 +783,99 @@ footer .gradient {
 
 </section>
 
-<!-- 遠端同步 (開發中) -->
+<!-- 遠端同步 -->
 <section class="tab-panel" id="tab-remote">
-  <div class="card">
+
+  <div class="card" id="rm-setup">
     <h2>📡 遠端同步抽籤</h2>
-    <p class="muted">這個 tab 正在重建中。下一版會有：主持人開房抽籤，多位觀眾同步看到抽籤動畫。</p>
+    <p class="muted" style="font-size:13px">
+      主持人開房抽籤，觀眾手機打開即時看到同一份動畫和結果。
+    </p>
+
+    <div style="margin-top:14px">
+      <label>房號（你自己決定，任何字元都可以）</label>
+      <input type="text" id="rm-room-input" placeholder="例如：年會抽獎 🎁" maxlength="40" autocomplete="off">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="rm-host-btn">🏠 我是主持人（開房）</button>
+      <button class="btn" id="rm-join-btn">👀 我是觀眾（加入）</button>
+    </div>
+
+    <div id="rm-status-row" style="margin-top:12px"></div>
   </div>
+
+  <!-- Host view -->
+  <div class="card hidden" id="rm-host-panel">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h3 style="margin:0 0 4px">🏠 主持人房間</h3>
+        <div style="font-size:16px;font-weight:bold" id="rm-host-roomname"></div>
+      </div>
+      <button class="btn danger" id="rm-host-leave">關閉房間</button>
+    </div>
+
+    <div id="rm-host-conn-status" style="margin-top:10px"></div>
+
+    <div class="share-box" id="rm-host-share">
+      <div class="muted">分享連結給觀眾：</div>
+      <div class="code" id="rm-host-share-url"></div>
+      <div class="row">
+        <button class="btn" id="rm-host-copy">📋 複製連結</button>
+        <button class="btn" id="rm-host-qr">📱 顯示 QR</button>
+      </div>
+      <canvas id="rm-host-qr-canvas" class="qr-canvas hidden"></canvas>
+    </div>
+
+    <div class="sep"></div>
+
+    <label>名單（一行一個名字）</label>
+    <textarea id="rm-host-names" placeholder="王小明&#10;李小華&#10;陳大明"></textarea>
+
+    <div style="margin-top:10px">
+      <label>模式</label>
+      <div class="seg" id="rm-host-mode">
+        <button data-mode="unique" class="active">不重複</button>
+        <button data-mode="repeat">可重複</button>
+        <button data-mode="groups">分組</button>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div id="rm-host-n-field">
+        <label>抽幾位</label>
+        <input type="number" id="rm-host-n" min="1" value="1">
+      </div>
+      <div id="rm-host-g-field" class="hidden">
+        <label>分幾組</label>
+        <input type="number" id="rm-host-g" min="2" value="2">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="rm-host-go">🎯 抽籤（同步到全部觀眾）</button>
+    </div>
+
+    <div class="reveal-stage hidden" id="rm-host-stage"></div>
+  </div>
+
+  <!-- Viewer view -->
+  <div class="card hidden" id="rm-viewer-panel">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h3 style="margin:0 0 4px">👀 觀眾模式</h3>
+        <div style="font-size:16px;font-weight:bold" id="rm-viewer-roomname"></div>
+      </div>
+      <button class="btn danger" id="rm-viewer-leave">離開</button>
+    </div>
+
+    <div id="rm-viewer-conn-status" style="margin-top:10px"></div>
+
+    <div class="reveal-stage" id="rm-viewer-stage">
+      <div class="spin" style="color:var(--muted)">等待主持人抽籤…</div>
+    </div>
+  </div>
+
 </section>
 
 </main>
@@ -1884,6 +1971,332 @@ pairEls.qr.addEventListener('click', () => {
 pairLoad();
 
 /* ============================================================
+   REMOTE SYNC DRAW
+============================================================ */
+const REMOTE = {
+  PREFIX: 'pu-rm-',
+  peer: null,
+  role: null,        // 'host' | 'viewer'
+  conns: [],         // host: array of connections; viewer: single conn in [0]
+  roomName: '',
+  peerId: '',
+  mode: 'unique'
+};
+
+const rmEls = {
+  setup: document.getElementById('rm-setup'),
+  roomInput: document.getElementById('rm-room-input'),
+  hostBtn: document.getElementById('rm-host-btn'),
+  joinBtn: document.getElementById('rm-join-btn'),
+  statusRow: document.getElementById('rm-status-row'),
+
+  // host
+  hostPanel: document.getElementById('rm-host-panel'),
+  hostRoomname: document.getElementById('rm-host-roomname'),
+  hostLeave: document.getElementById('rm-host-leave'),
+  hostConnStatus: document.getElementById('rm-host-conn-status'),
+  hostShareUrl: document.getElementById('rm-host-share-url'),
+  hostCopy: document.getElementById('rm-host-copy'),
+  hostQrBtn: document.getElementById('rm-host-qr'),
+  hostQrCanvas: document.getElementById('rm-host-qr-canvas'),
+  hostNames: document.getElementById('rm-host-names'),
+  hostMode: document.getElementById('rm-host-mode'),
+  hostNField: document.getElementById('rm-host-n-field'),
+  hostN: document.getElementById('rm-host-n'),
+  hostGField: document.getElementById('rm-host-g-field'),
+  hostG: document.getElementById('rm-host-g'),
+  hostGo: document.getElementById('rm-host-go'),
+  hostStage: document.getElementById('rm-host-stage'),
+
+  // viewer
+  viewerPanel: document.getElementById('rm-viewer-panel'),
+  viewerRoomname: document.getElementById('rm-viewer-roomname'),
+  viewerLeave: document.getElementById('rm-viewer-leave'),
+  viewerConnStatus: document.getElementById('rm-viewer-conn-status'),
+  viewerStage: document.getElementById('rm-viewer-stage')
+};
+
+function rmToPeerId(roomName) {
+  return REMOTE.PREFIX + hashRoomName(roomName);
+}
+
+function rmCreatePeer(peerId) {
+  return new Promise((resolve, reject) => {
+    const peer = new Peer(peerId);
+    let opened = false;
+    peer.on('open', () => { opened = true; resolve(peer); });
+    peer.on('error', err => {
+      if (!opened) reject(err);
+    });
+  });
+}
+
+function rmUpdateHostViewerCount() {
+  const n = REMOTE.conns.filter(c => c && c.open).length;
+  setStatus(rmEls.hostConnStatus,
+    n === 0 ? '⏳ 等待觀眾加入…' : `✅ 觀眾 ${n} 位在線`,
+    n === 0 ? 'wait' : 'ok');
+}
+
+/* Animation (mirrors draw module but reads from explicit data) */
+function rmAnimate(stageEl, payload) {
+  stageEl.innerHTML = '';
+  stageEl.classList.remove('hidden');
+  const pool = payload.pool || [];
+  if (pool.length === 0) return;
+
+  if (payload.mode === 'groups') {
+    const spin = document.createElement('div');
+    spin.className = 'spin';
+    spin.textContent = '🎲 分組中...';
+    stageEl.appendChild(spin);
+
+    let step = 0;
+    const t = setInterval(() => {
+      spin.textContent = '🎲 ' + pool[Math.floor(Math.random() * pool.length)];
+      step++;
+      if (step > 16) {
+        clearInterval(t);
+        stageEl.innerHTML = '';
+        payload.groups.forEach((group, gi) => {
+          const lbl = document.createElement('div');
+          lbl.className = 'group-label';
+          lbl.textContent = `第 ${gi + 1} 組`;
+          stageEl.appendChild(lbl);
+          group.forEach((name, i) => {
+            setTimeout(() => {
+              const div = document.createElement('div');
+              div.className = 'final';
+              div.textContent = name;
+              stageEl.appendChild(div);
+            }, (gi * group.length + i) * 140);
+          });
+        });
+      }
+    }, 60);
+    return;
+  }
+
+  const spin = document.createElement('div');
+  spin.className = 'spin';
+  spin.textContent = '🎲 抽籤中...';
+  stageEl.appendChild(spin);
+  let step = 0;
+  const t = setInterval(() => {
+    spin.textContent = '🎲 ' + pool[Math.floor(Math.random() * pool.length)];
+    step++;
+    if (step > 18) {
+      clearInterval(t);
+      spin.remove();
+      payload.winners.forEach((name, i) => {
+        setTimeout(() => {
+          const div = document.createElement('div');
+          div.className = 'final';
+          div.textContent = (payload.winners.length > 1 ? `${i + 1}. ` : '') + name;
+          stageEl.appendChild(div);
+        }, i * 180);
+      });
+    }
+  }, 55);
+}
+
+function rmShowShare() {
+  const url = location.origin + location.pathname + '#remote=' + encodeURIComponent(REMOTE.roomName);
+  rmEls.hostShareUrl.textContent = url;
+}
+
+function rmResetUI() {
+  rmEls.setup.classList.remove('hidden');
+  rmEls.hostPanel.classList.add('hidden');
+  rmEls.viewerPanel.classList.add('hidden');
+  rmEls.statusRow.innerHTML = '';
+  rmEls.hostConnStatus.innerHTML = '';
+  rmEls.viewerConnStatus.innerHTML = '';
+  rmEls.hostStage.innerHTML = '';
+  rmEls.hostStage.classList.add('hidden');
+  rmEls.viewerStage.innerHTML = '<div class="spin" style="color:var(--muted)">等待主持人抽籤…</div>';
+  rmEls.hostQrCanvas.classList.add('hidden');
+  if (location.hash.startsWith('#remote=')) history.replaceState(null, '', '#remote');
+}
+
+function rmLeave() {
+  try { REMOTE.conns.forEach(c => { if (c) c.close(); }); } catch (e) {}
+  try { if (REMOTE.peer) REMOTE.peer.destroy(); } catch (e) {}
+  REMOTE.peer = null;
+  REMOTE.role = null;
+  REMOTE.conns = [];
+  REMOTE.roomName = '';
+  rmResetUI();
+}
+
+/* Host actions */
+async function rmHost(roomName) {
+  try {
+    REMOTE.role = 'host';
+    REMOTE.roomName = roomName;
+    REMOTE.peerId = rmToPeerId(roomName);
+    setStatus(rmEls.statusRow, '⏳ 建立房間中...', 'wait');
+    REMOTE.peer = await rmCreatePeer(REMOTE.peerId);
+
+    rmEls.setup.classList.add('hidden');
+    rmEls.hostPanel.classList.remove('hidden');
+    rmEls.hostRoomname.textContent = roomName;
+    rmShowShare();
+    rmUpdateHostViewerCount();
+
+    REMOTE.peer.on('connection', conn => {
+      REMOTE.conns.push(conn);
+      conn.on('open', () => rmUpdateHostViewerCount());
+      conn.on('close', () => {
+        REMOTE.conns = REMOTE.conns.filter(c => c !== conn);
+        rmUpdateHostViewerCount();
+      });
+      conn.on('error', () => {
+        REMOTE.conns = REMOTE.conns.filter(c => c !== conn);
+        rmUpdateHostViewerCount();
+      });
+    });
+  } catch (err) {
+    if (err && err.type === 'unavailable-id') {
+      setStatus(rmEls.statusRow, '⚠️ 這個房號有人在用，換一個或等幾秒', 'err');
+    } else {
+      setStatus(rmEls.statusRow, '⚠️ 開房失敗：' + (err.type || err.message || err), 'err');
+    }
+    REMOTE.peer = null;
+    REMOTE.role = null;
+  }
+}
+
+function rmBroadcast(data) {
+  REMOTE.conns.forEach(c => {
+    try { if (c.open) c.send(data); } catch (e) {}
+  });
+}
+
+function rmHostGo() {
+  const names = rmEls.hostNames.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if (names.length === 0) { alert('名單是空的'); return; }
+  const pool = names.map(n => ({ name: n, weight: 1 }));
+
+  let payload;
+  if (REMOTE.mode === 'groups') {
+    const g = Math.max(2, parseInt(rmEls.hostG.value, 10) || 2);
+    if (names.length < g) { alert(`只有 ${names.length} 人，無法分成 ${g} 組`); return; }
+    const groups = drawChunkIntoGroups(names, g);
+    payload = { mode: 'groups', groups, pool: names };
+  } else {
+    const n = Math.max(1, parseInt(rmEls.hostN.value, 10) || 1);
+    const allowRepeat = REMOTE.mode === 'repeat';
+    if (!allowRepeat && n > names.length) {
+      alert(`只有 ${names.length} 位可抽，無法抽出 ${n} 位不重複`); return;
+    }
+    const winners = drawSampleWeighted(pool, n, allowRepeat);
+    payload = { mode: REMOTE.mode, winners, pool: names };
+  }
+
+  rmBroadcast({ type: 'draw', payload });
+  rmAnimate(rmEls.hostStage, payload);
+}
+
+/* Viewer actions */
+async function rmJoin(roomName) {
+  try {
+    REMOTE.role = 'viewer';
+    REMOTE.roomName = roomName;
+    REMOTE.peerId = rmToPeerId(roomName);
+    setStatus(rmEls.statusRow, '⏳ 連線中...', 'wait');
+
+    REMOTE.peer = await rmCreatePeer(REMOTE.PREFIX + 'viewer-' + randomCode(6));
+
+    rmEls.setup.classList.add('hidden');
+    rmEls.viewerPanel.classList.remove('hidden');
+    rmEls.viewerRoomname.textContent = roomName;
+    setStatus(rmEls.viewerConnStatus, '⏳ 連線主持人中...', 'wait');
+
+    const conn = REMOTE.peer.connect(REMOTE.peerId, { reliable: true });
+    REMOTE.conns = [conn];
+
+    conn.on('open', () => {
+      setStatus(rmEls.viewerConnStatus, '✅ 已連上主持人', 'ok');
+    });
+    conn.on('data', data => {
+      if (!data || !data.type) return;
+      if (data.type === 'draw') rmAnimate(rmEls.viewerStage, data.payload);
+    });
+    conn.on('close', () => {
+      setStatus(rmEls.viewerConnStatus, '⚠️ 主持人已離線', 'err');
+    });
+    conn.on('error', err => {
+      setStatus(rmEls.viewerConnStatus, '⚠️ 連線錯誤：' + err.type, 'err');
+    });
+  } catch (err) {
+    setStatus(rmEls.statusRow, '⚠️ 加入失敗：' + (err.type || err.message || err), 'err');
+    REMOTE.peer = null;
+    REMOTE.role = null;
+  }
+}
+
+/* Remote event bindings */
+rmEls.hostBtn.addEventListener('click', () => {
+  const name = rmEls.roomInput.value.trim();
+  if (!name) {
+    setStatus(rmEls.statusRow, '⚠️ 請先輸入房號', 'err');
+    rmEls.roomInput.focus();
+    return;
+  }
+  rmHost(name);
+});
+
+rmEls.joinBtn.addEventListener('click', () => {
+  const name = rmEls.roomInput.value.trim();
+  if (!name) {
+    setStatus(rmEls.statusRow, '⚠️ 請輸入主持人給你的房號', 'err');
+    rmEls.roomInput.focus();
+    return;
+  }
+  rmJoin(name);
+});
+
+rmEls.hostLeave.addEventListener('click', rmLeave);
+rmEls.viewerLeave.addEventListener('click', rmLeave);
+
+rmEls.hostCopy.addEventListener('click', async () => {
+  const url = rmEls.hostShareUrl.textContent;
+  if (await copyToClipboard(url)) {
+    rmEls.hostCopy.textContent = '✅ 已複製';
+    setTimeout(() => rmEls.hostCopy.textContent = '📋 複製連結', 1500);
+  }
+});
+
+rmEls.hostQrBtn.addEventListener('click', () => {
+  const url = rmEls.hostShareUrl.textContent;
+  if (rmEls.hostQrCanvas.classList.contains('hidden')) {
+    QRCode.toCanvas(rmEls.hostQrCanvas, url, { width: 180, margin: 1 }, err => {
+      if (!err) rmEls.hostQrCanvas.classList.remove('hidden');
+    });
+  } else {
+    rmEls.hostQrCanvas.classList.add('hidden');
+  }
+});
+
+rmEls.hostMode.querySelectorAll('button').forEach(b => {
+  b.addEventListener('click', () => {
+    rmEls.hostMode.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    REMOTE.mode = b.dataset.mode;
+    if (REMOTE.mode === 'groups') {
+      rmEls.hostNField.classList.add('hidden');
+      rmEls.hostGField.classList.remove('hidden');
+    } else {
+      rmEls.hostNField.classList.remove('hidden');
+      rmEls.hostGField.classList.add('hidden');
+    }
+  });
+});
+
+rmEls.hostGo.addEventListener('click', rmHostGo);
+
+/* ============================================================
    HASH ROUTING
 ============================================================ */
 function applyHash() {
@@ -1896,8 +2309,18 @@ function applyHash() {
     if (roomName) {
       switchTab('rps');
       rpsEls.roomInput.value = roomName;
-      // 自動填但不自動加入，讓使用者按「加入」
       setStatus(rpsEls.statusRow, '💡 點「加入朋友的房間」進入 ' + roomName, 'wait');
+    }
+    return;
+  }
+
+  // #remote=<房名>
+  if (hash.startsWith('remote=')) {
+    const roomName = decodeURIComponent(hash.slice(7));
+    if (roomName) {
+      switchTab('remote');
+      rmEls.roomInput.value = roomName;
+      setStatus(rmEls.statusRow, '💡 點「我是觀眾」加入 ' + roomName, 'wait');
     }
     return;
   }
