@@ -733,12 +733,54 @@ footer .gradient {
 
 </section>
 
-<!-- 配對 (開發中) -->
+<!-- 配對 -->
 <section class="tab-panel" id="tab-pair">
+
   <div class="card">
-    <h2>💘 配對</h2>
-    <p class="muted">這個 tab 正在重建中。下一版會有：一對一、A-gets-B、秘密聖誕老人（derangement 演算法）。</p>
+    <h2>💘 配對抽籤</h2>
+
+    <label>模式</label>
+    <div class="seg" id="pair-mode-seg">
+      <button data-mode="oneone" class="active">一對一</button>
+      <button data-mode="agetsb">A 配 B（可重複）</button>
+      <button data-mode="santa">秘密聖誕老人</button>
+    </div>
+    <div class="muted" id="pair-mode-hint" style="margin-top:6px"></div>
+
+    <div id="pair-ab-wrap">
+      <div style="margin-top:14px">
+        <label>A 組（一行一個）</label>
+        <textarea id="pair-a" placeholder="Alice&#10;Bob&#10;Carol"></textarea>
+      </div>
+      <div style="margin-top:10px">
+        <label>B 組（一行一個）</label>
+        <textarea id="pair-b" placeholder="禮物A&#10;禮物B&#10;禮物C"></textarea>
+      </div>
+    </div>
+
+    <div id="pair-people-wrap" class="hidden" style="margin-top:14px">
+      <label>所有參加者（一行一個，至少 2 位）</label>
+      <textarea id="pair-people" placeholder="王小明&#10;李小華&#10;陳大明&#10;..."></textarea>
+    </div>
+
+    <div class="muted" style="margin-top:6px" id="pair-count"></div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="pair-go">💘 開始配對</button>
+    </div>
   </div>
+
+  <div class="card hidden" id="pair-result-card">
+    <h3>配對結果</h3>
+    <div class="reveal-stage" id="pair-stage"></div>
+    <div class="btn-row">
+      <button class="btn" id="pair-copy">📋 複製結果</button>
+      <button class="btn" id="pair-qr">📱 QR 分享</button>
+      <button class="btn" id="pair-redo">🔄 再配一次</button>
+    </div>
+    <canvas id="pair-qr-canvas" class="qr-canvas hidden"></canvas>
+  </div>
+
 </section>
 
 <!-- 遠端同步 (開發中) -->
@@ -1619,6 +1661,227 @@ drawLoad();
 drawRenderSelect();
 drawLoadCurrentIntoTextarea();
 drawRenderHistory();
+
+/* ============================================================
+   PAIR (PAIRING)
+============================================================ */
+const PAIR = {
+  LS_A: 'partyup.pair.a',
+  LS_B: 'partyup.pair.b',
+  LS_PEOPLE: 'partyup.pair.people',
+  LS_MODE: 'partyup.pair.mode',
+  mode: 'oneone',
+  lastResult: null   // [[from, to], ...]
+};
+
+const pairEls = {
+  modeSeg: document.getElementById('pair-mode-seg'),
+  modeHint: document.getElementById('pair-mode-hint'),
+  abWrap: document.getElementById('pair-ab-wrap'),
+  a: document.getElementById('pair-a'),
+  b: document.getElementById('pair-b'),
+  peopleWrap: document.getElementById('pair-people-wrap'),
+  people: document.getElementById('pair-people'),
+  count: document.getElementById('pair-count'),
+  go: document.getElementById('pair-go'),
+  resultCard: document.getElementById('pair-result-card'),
+  stage: document.getElementById('pair-stage'),
+  copy: document.getElementById('pair-copy'),
+  qr: document.getElementById('pair-qr'),
+  redo: document.getElementById('pair-redo'),
+  qrCanvas: document.getElementById('pair-qr-canvas')
+};
+
+const PAIR_HINTS = {
+  oneone: 'A 跟 B 人數必須一樣。每個 A 會配到一個不同的 B。',
+  agetsb: '每個 A 會從 B 裡隨機抽一個（B 可能被重複抽到）。',
+  santa: '每個人會抽到名單裡另一個人（不會抽到自己）。適合交換禮物。'
+};
+
+function pairGetLines(el) {
+  return el.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+}
+
+function pairUpdateCount() {
+  let msg = '';
+  if (PAIR.mode === 'santa') {
+    const p = pairGetLines(pairEls.people);
+    msg = `${p.length} 位參加者`;
+  } else {
+    const a = pairGetLines(pairEls.a);
+    const b = pairGetLines(pairEls.b);
+    msg = `A ${a.length} 位，B ${b.length} 位`;
+    if (PAIR.mode === 'oneone' && a.length !== b.length && a.length > 0 && b.length > 0) {
+      msg += '（⚠️ 一對一模式人數要相同）';
+    }
+  }
+  pairEls.count.textContent = msg;
+}
+
+function pairLoad() {
+  pairEls.a.value = localStorage.getItem(PAIR.LS_A) || '';
+  pairEls.b.value = localStorage.getItem(PAIR.LS_B) || '';
+  pairEls.people.value = localStorage.getItem(PAIR.LS_PEOPLE) || '';
+  const m = localStorage.getItem(PAIR.LS_MODE);
+  if (m && ['oneone', 'agetsb', 'santa'].includes(m)) {
+    PAIR.mode = m;
+  }
+  // sync mode UI
+  pairEls.modeSeg.querySelectorAll('button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === PAIR.mode);
+  });
+  pairApplyMode();
+}
+
+function pairApplyMode() {
+  pairEls.modeHint.textContent = PAIR_HINTS[PAIR.mode] || '';
+  if (PAIR.mode === 'santa') {
+    pairEls.abWrap.classList.add('hidden');
+    pairEls.peopleWrap.classList.remove('hidden');
+  } else {
+    pairEls.abWrap.classList.remove('hidden');
+    pairEls.peopleWrap.classList.add('hidden');
+  }
+  pairUpdateCount();
+}
+
+function pairShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pairDerangement(names) {
+  const n = names.length;
+  if (n < 2) return null;
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const shuffled = pairShuffle(names);
+    let ok = true;
+    for (let i = 0; i < n; i++) {
+      if (shuffled[i] === names[i]) { ok = false; break; }
+    }
+    if (ok) return names.map((from, i) => [from, shuffled[i]]);
+  }
+  // Fallback: cyclic rotation (guaranteed no fixed points for n >= 2)
+  return names.map((from, i) => [from, names[(i + 1) % n]]);
+}
+
+function pairAnimateReveal(results) {
+  pairEls.stage.innerHTML = '';
+  pairEls.resultCard.classList.remove('hidden');
+  pairEls.qrCanvas.classList.add('hidden');
+
+  // Spin header
+  const spin = document.createElement('div');
+  spin.className = 'spin';
+  spin.textContent = '💘 配對中...';
+  pairEls.stage.appendChild(spin);
+
+  const flat = results.flat();
+  let step = 0;
+  const spinTimer = setInterval(() => {
+    const s = flat[Math.floor(Math.random() * flat.length)];
+    spin.textContent = '💘 ' + s;
+    step++;
+    if (step > 16) {
+      clearInterval(spinTimer);
+      spin.remove();
+      results.forEach(([from, to], i) => {
+        setTimeout(() => {
+          const div = document.createElement('div');
+          div.className = 'final';
+          div.textContent = `${from}  →  ${to}`;
+          pairEls.stage.appendChild(div);
+        }, i * 150);
+      });
+    }
+  }, 60);
+}
+
+function pairResultText() {
+  if (!PAIR.lastResult) return '';
+  return PAIR.lastResult.map(([a, b]) => `${a} → ${b}`).join('\n');
+}
+
+function pairGo() {
+  let result;
+  if (PAIR.mode === 'santa') {
+    const people = pairGetLines(pairEls.people);
+    if (people.length < 2) { alert('至少要 2 位參加者'); return; }
+    const set = new Set(people);
+    if (set.size !== people.length) { alert('名單中有重複的名字，請檢查'); return; }
+    result = pairDerangement(people);
+    if (!result) { alert('配對失敗'); return; }
+  } else {
+    const a = pairGetLines(pairEls.a);
+    const b = pairGetLines(pairEls.b);
+    if (a.length === 0 || b.length === 0) { alert('A 和 B 都要有人'); return; }
+    if (PAIR.mode === 'oneone') {
+      if (a.length !== b.length) { alert('一對一模式：A 和 B 人數要相同'); return; }
+      const shuffledB = pairShuffle(b);
+      result = a.map((x, i) => [x, shuffledB[i]]);
+    } else {
+      // agetsb: each A gets random B (with replacement)
+      result = a.map(x => [x, b[Math.floor(Math.random() * b.length)]]);
+    }
+  }
+  PAIR.lastResult = result;
+  pairAnimateReveal(result);
+}
+
+/* Pair event bindings */
+pairEls.modeSeg.querySelectorAll('button').forEach(b => {
+  b.addEventListener('click', () => {
+    pairEls.modeSeg.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    PAIR.mode = b.dataset.mode;
+    localStorage.setItem(PAIR.LS_MODE, PAIR.mode);
+    pairApplyMode();
+  });
+});
+
+pairEls.a.addEventListener('input', () => {
+  localStorage.setItem(PAIR.LS_A, pairEls.a.value);
+  pairUpdateCount();
+});
+pairEls.b.addEventListener('input', () => {
+  localStorage.setItem(PAIR.LS_B, pairEls.b.value);
+  pairUpdateCount();
+});
+pairEls.people.addEventListener('input', () => {
+  localStorage.setItem(PAIR.LS_PEOPLE, pairEls.people.value);
+  pairUpdateCount();
+});
+
+pairEls.go.addEventListener('click', pairGo);
+pairEls.redo.addEventListener('click', pairGo);
+
+pairEls.copy.addEventListener('click', async () => {
+  const txt = pairResultText();
+  if (!txt) return;
+  if (await copyToClipboard(txt)) {
+    pairEls.copy.textContent = '✅ 已複製';
+    setTimeout(() => pairEls.copy.textContent = '📋 複製結果', 1500);
+  }
+});
+
+pairEls.qr.addEventListener('click', () => {
+  const txt = pairResultText();
+  if (!txt) return;
+  if (pairEls.qrCanvas.classList.contains('hidden')) {
+    QRCode.toCanvas(pairEls.qrCanvas, txt, { width: 200, margin: 1 }, err => {
+      if (!err) pairEls.qrCanvas.classList.remove('hidden');
+    });
+  } else {
+    pairEls.qrCanvas.classList.add('hidden');
+  }
+});
+
+/* Init pair */
+pairLoad();
 
 /* ============================================================
    HASH ROUTING
