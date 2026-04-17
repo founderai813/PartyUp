@@ -406,6 +406,51 @@ textarea { min-height: 100px; resize: vertical; }
   font-weight: bold;
 }
 .chip .x:hover { color: var(--err); }
+.weights-editor {
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px;
+}
+.weight-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.weight-row:last-child { border-bottom: none; }
+.weight-row .wname {
+  flex: 1;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.weight-row input[type="number"] {
+  width: 64px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 14px;
+  text-align: center;
+}
+.weight-row .w-btn {
+  width: 26px; height: 26px;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.weight-row .w-btn:hover { border-color: var(--accent-1); }
+
 .reveal-stage {
   min-height: 80px;
   background: var(--panel-2);
@@ -633,9 +678,15 @@ footer .gradient {
       <button class="btn danger" id="draw-list-delete" title="刪除名單">🗑️</button>
     </div>
 
-    <label>名單內容（一行一個，`王小明 x3` 表示權重 3 倍）</label>
-    <textarea id="draw-names" placeholder="王小明&#10;李小華 x2&#10;陳大明 x3&#10;..."></textarea>
+    <label>名單內容（一行一個名字）</label>
+    <textarea id="draw-names" placeholder="王小明&#10;李小華&#10;陳大明&#10;..."></textarea>
     <div class="muted" style="margin-top:4px" id="draw-count">0 位參加者</div>
+
+    <div id="draw-weights-wrap" class="hidden" style="margin-top:12px">
+      <label>加權設定（數字越大中獎率越高，預設 1）</label>
+      <div class="weights-editor" id="draw-weights"></div>
+      <button class="btn" id="draw-weights-reset" style="margin-top:6px;font-size:12px;padding:6px 10px">全部重設為 1</button>
+    </div>
 
     <div style="margin-top:16px">
       <label>模式</label>
@@ -1096,6 +1147,9 @@ const drawEls = {
   deleteBtn: document.getElementById('draw-list-delete'),
   names: document.getElementById('draw-names'),
   count: document.getElementById('draw-count'),
+  weightsWrap: document.getElementById('draw-weights-wrap'),
+  weights: document.getElementById('draw-weights'),
+  weightsReset: document.getElementById('draw-weights-reset'),
   modeSeg: document.getElementById('draw-mode-seg'),
   nField: document.getElementById('draw-n-field'),
   nLabel: document.getElementById('draw-n-label'),
@@ -1131,10 +1185,12 @@ function drawLoad() {
 
   if (DRAW.lists.length === 0) {
     const id = 'list-' + Date.now();
-    DRAW.lists.push({ id, name: '預設名單', content: '' });
+    DRAW.lists.push({ id, name: '預設名單', content: '', weights: {} });
     DRAW.currentId = id;
     drawSaveLists();
   }
+  // Ensure every list has weights object
+  DRAW.lists.forEach(l => { if (!l.weights || typeof l.weights !== 'object') l.weights = {}; });
   if (!DRAW.lists.find(l => l.id === DRAW.currentId)) {
     DRAW.currentId = DRAW.lists[0].id;
   }
@@ -1167,6 +1223,7 @@ function drawLoadCurrentIntoTextarea() {
   const l = drawCurrentList();
   drawEls.names.value = l ? l.content : '';
   drawUpdateCount();
+  drawRenderWeights();
 }
 
 function drawPersistTextarea() {
@@ -1177,32 +1234,83 @@ function drawPersistTextarea() {
   }
 }
 
+function drawGetNameList() {
+  return drawEls.names.value.split(/\r?\n/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
 function drawParseNames() {
-  // Parse text into [{name, weight}]; support `王小明 x3` syntax
-  const lines = drawEls.names.value.split(/\r?\n/);
-  const out = [];
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-    const m = line.match(/^(.+?)\s*[xX*×](\d+)\s*$/);
-    if (m) {
-      const name = m[1].trim();
-      const w = Math.max(1, parseInt(m[2], 10) || 1);
-      if (name) out.push({ name, weight: w });
-    } else {
-      out.push({ name: line, weight: 1 });
-    }
-  }
-  return out;
+  const l = drawCurrentList();
+  const weights = l ? l.weights : {};
+  return drawGetNameList().map(n => ({
+    name: n,
+    weight: Math.max(1, parseInt(weights[n], 10) || 1)
+  }));
 }
 
 function drawUpdateCount() {
+  const names = drawGetNameList();
   const parsed = drawParseNames();
-  const uniq = parsed.length;
+  const uniq = names.length;
   const total = parsed.reduce((s, p) => s + p.weight, 0);
   drawEls.count.textContent = uniq === total
     ? `${uniq} 位參加者`
     : `${uniq} 位參加者（加權後 ${total}）`;
+}
+
+function drawRenderWeights() {
+  const names = drawGetNameList();
+  const l = drawCurrentList();
+  if (!l) return;
+
+  // Drop weight entries for names no longer in list
+  Object.keys(l.weights).forEach(k => { if (!names.includes(k)) delete l.weights[k]; });
+
+  if (names.length === 0) {
+    drawEls.weightsWrap.classList.add('hidden');
+    drawEls.weights.innerHTML = '';
+    return;
+  }
+  drawEls.weightsWrap.classList.remove('hidden');
+
+  // Deduplicate while preserving order
+  const seen = new Set();
+  const uniqueNames = [];
+  for (const n of names) {
+    if (!seen.has(n)) { seen.add(n); uniqueNames.push(n); }
+  }
+
+  drawEls.weights.innerHTML = '';
+  uniqueNames.forEach(name => {
+    const w = Math.max(1, parseInt(l.weights[name], 10) || 1);
+    const row = document.createElement('div');
+    row.className = 'weight-row';
+    row.innerHTML = `
+      <span class="wname" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+      <button class="w-btn" data-act="minus">−</button>
+      <input type="number" min="1" max="99" value="${w}" data-name="${escapeHtml(name)}">
+      <button class="w-btn" data-act="plus">＋</button>
+    `;
+    const input = row.querySelector('input');
+    input.addEventListener('input', () => {
+      const v = Math.max(1, parseInt(input.value, 10) || 1);
+      l.weights[name] = v;
+      drawSaveLists();
+      drawUpdateCount();
+    });
+    row.querySelector('[data-act="minus"]').addEventListener('click', () => {
+      const v = Math.max(1, (parseInt(input.value, 10) || 1) - 1);
+      input.value = v;
+      input.dispatchEvent(new Event('input'));
+    });
+    row.querySelector('[data-act="plus"]').addEventListener('click', () => {
+      const v = Math.min(99, (parseInt(input.value, 10) || 1) + 1);
+      input.value = v;
+      input.dispatchEvent(new Event('input'));
+    });
+    drawEls.weights.appendChild(row);
+  });
 }
 
 function drawRenderHistory() {
@@ -1440,8 +1548,18 @@ drawEls.deleteBtn.addEventListener('click', () => {
 });
 
 drawEls.names.addEventListener('input', () => {
-  drawUpdateCount();
   drawPersistTextarea();
+  drawUpdateCount();
+  drawRenderWeights();
+});
+
+drawEls.weightsReset.addEventListener('click', () => {
+  const l = drawCurrentList();
+  if (!l) return;
+  l.weights = {};
+  drawSaveLists();
+  drawRenderWeights();
+  drawUpdateCount();
 });
 
 drawEls.modeSeg.querySelectorAll('button').forEach(b => {
