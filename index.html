@@ -320,6 +320,126 @@ textarea { min-height: 100px; resize: vertical; }
   max-width: 180px;
 }
 
+/* Draw (lottery) */
+.seg {
+  display: inline-flex;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.seg button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.seg button.active {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  color: #000;
+  font-weight: bold;
+}
+.list-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.list-bar select {
+  flex: 1;
+  min-width: 140px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+.list-bar .btn { padding: 8px 10px; font-size: 13px; }
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+.field-row label { margin-bottom: 4px; }
+.field-row input[type="number"] {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.toggle input { cursor: pointer; }
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.chip .x {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: bold;
+}
+.chip .x:hover { color: var(--err); }
+.reveal-stage {
+  min-height: 80px;
+  background: var(--panel-2);
+  border-radius: 16px;
+  padding: 18px;
+  margin-top: 12px;
+  text-align: center;
+  overflow: hidden;
+  position: relative;
+}
+.reveal-stage .spin {
+  font-size: 26px;
+  font-weight: bold;
+  transition: opacity 0.1s;
+}
+.reveal-stage .final {
+  font-size: 22px;
+  font-weight: bold;
+  margin: 4px 0;
+  animation: popIn 0.4s cubic-bezier(0.17, 0.84, 0.44, 1) both;
+  color: var(--accent-1);
+}
+.reveal-stage .group-label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+@keyframes popIn {
+  0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+  60% { transform: scale(1.15) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
 /* Utils */
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); font-size: 12px; }
@@ -499,12 +619,67 @@ footer .gradient {
   </div>
 </section>
 
-<!-- 抽籤 (開發中) -->
+<!-- 抽籤 -->
 <section class="tab-panel" id="tab-draw">
+
   <div class="card">
     <h2>🎲 抽籤</h2>
-    <p class="muted">這個 tab 正在重建中。下一版會有：多名單、加權、不重複/可重複/分組、排除歷史紀錄、QR 分享結果。</p>
+
+    <h3>名單管理</h3>
+    <div class="list-bar">
+      <select id="draw-list-select"></select>
+      <button class="btn" id="draw-list-new" title="新增名單">➕</button>
+      <button class="btn" id="draw-list-rename" title="重新命名">✏️</button>
+      <button class="btn danger" id="draw-list-delete" title="刪除名單">🗑️</button>
+    </div>
+
+    <label>名單內容（一行一個，`王小明 x3` 表示權重 3 倍）</label>
+    <textarea id="draw-names" placeholder="王小明&#10;李小華 x2&#10;陳大明 x3&#10;..."></textarea>
+    <div class="muted" style="margin-top:4px" id="draw-count">0 位參加者</div>
+
+    <div style="margin-top:16px">
+      <label>模式</label>
+      <div class="seg" id="draw-mode-seg">
+        <button data-mode="unique" class="active">不重複</button>
+        <button data-mode="repeat">可重複</button>
+        <button data-mode="groups">分組</button>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div id="draw-n-field">
+        <label id="draw-n-label">抽幾位</label>
+        <input type="number" id="draw-n" min="1" value="1">
+      </div>
+      <div id="draw-g-field" class="hidden">
+        <label>分幾組</label>
+        <input type="number" id="draw-g" min="2" value="2">
+      </div>
+    </div>
+
+    <label class="toggle">
+      <input type="checkbox" id="draw-exclude">
+      <span>排除已抽過的人（歷史紀錄）</span>
+    </label>
+    <div class="chip-wrap" id="draw-history-chips"></div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="draw-go">🎯 開始抽</button>
+      <button class="btn" id="draw-clear-history">清空歷史</button>
+    </div>
   </div>
+
+  <div class="card hidden" id="draw-result-card">
+    <h3>結果</h3>
+    <div class="reveal-stage" id="draw-stage"></div>
+    <div class="btn-row">
+      <button class="btn" id="draw-copy">📋 複製結果</button>
+      <button class="btn" id="draw-qr">📱 QR 分享</button>
+      <button class="btn" id="draw-redo">🔄 再抽一次</button>
+    </div>
+    <canvas id="draw-qr-canvas" class="qr-canvas hidden"></canvas>
+  </div>
+
 </section>
 
 <!-- 配對 (開發中) -->
@@ -898,6 +1073,434 @@ rpsEls.resetBtn.addEventListener('click', () => {
   rpsSend({ type: 'reset' });
   setStatus(rpsEls.connStatus, '♻️ 比分已重設', 'ok');
 });
+
+/* ============================================================
+   DRAW (LOTTERY)
+============================================================ */
+const DRAW = {
+  LS_LISTS: 'partyup.draw.lists',
+  LS_CURRENT: 'partyup.draw.current',
+  LS_HISTORY: 'partyup.draw.history',
+  LS_EXCLUDE: 'partyup.draw.exclude',
+  lists: [],
+  currentId: null,
+  mode: 'unique',
+  history: [],
+  lastResult: null
+};
+
+const drawEls = {
+  select: document.getElementById('draw-list-select'),
+  newBtn: document.getElementById('draw-list-new'),
+  renameBtn: document.getElementById('draw-list-rename'),
+  deleteBtn: document.getElementById('draw-list-delete'),
+  names: document.getElementById('draw-names'),
+  count: document.getElementById('draw-count'),
+  modeSeg: document.getElementById('draw-mode-seg'),
+  nField: document.getElementById('draw-n-field'),
+  nLabel: document.getElementById('draw-n-label'),
+  n: document.getElementById('draw-n'),
+  gField: document.getElementById('draw-g-field'),
+  g: document.getElementById('draw-g'),
+  exclude: document.getElementById('draw-exclude'),
+  historyChips: document.getElementById('draw-history-chips'),
+  go: document.getElementById('draw-go'),
+  clearHistory: document.getElementById('draw-clear-history'),
+  resultCard: document.getElementById('draw-result-card'),
+  stage: document.getElementById('draw-stage'),
+  copy: document.getElementById('draw-copy'),
+  qr: document.getElementById('draw-qr'),
+  redo: document.getElementById('draw-redo'),
+  qrCanvas: document.getElementById('draw-qr-canvas')
+};
+
+function drawLoad() {
+  try {
+    DRAW.lists = JSON.parse(localStorage.getItem(DRAW.LS_LISTS) || '[]');
+  } catch (e) { DRAW.lists = []; }
+  if (!Array.isArray(DRAW.lists)) DRAW.lists = [];
+
+  DRAW.currentId = localStorage.getItem(DRAW.LS_CURRENT);
+
+  try {
+    DRAW.history = JSON.parse(localStorage.getItem(DRAW.LS_HISTORY) || '[]');
+  } catch (e) { DRAW.history = []; }
+  if (!Array.isArray(DRAW.history)) DRAW.history = [];
+
+  drawEls.exclude.checked = localStorage.getItem(DRAW.LS_EXCLUDE) === '1';
+
+  if (DRAW.lists.length === 0) {
+    const id = 'list-' + Date.now();
+    DRAW.lists.push({ id, name: '預設名單', content: '' });
+    DRAW.currentId = id;
+    drawSaveLists();
+  }
+  if (!DRAW.lists.find(l => l.id === DRAW.currentId)) {
+    DRAW.currentId = DRAW.lists[0].id;
+  }
+}
+
+function drawSaveLists() {
+  localStorage.setItem(DRAW.LS_LISTS, JSON.stringify(DRAW.lists));
+  localStorage.setItem(DRAW.LS_CURRENT, DRAW.currentId);
+}
+function drawSaveHistory() {
+  localStorage.setItem(DRAW.LS_HISTORY, JSON.stringify(DRAW.history));
+}
+
+function drawRenderSelect() {
+  drawEls.select.innerHTML = '';
+  DRAW.lists.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.id;
+    opt.textContent = l.name;
+    if (l.id === DRAW.currentId) opt.selected = true;
+    drawEls.select.appendChild(opt);
+  });
+}
+
+function drawCurrentList() {
+  return DRAW.lists.find(l => l.id === DRAW.currentId);
+}
+
+function drawLoadCurrentIntoTextarea() {
+  const l = drawCurrentList();
+  drawEls.names.value = l ? l.content : '';
+  drawUpdateCount();
+}
+
+function drawPersistTextarea() {
+  const l = drawCurrentList();
+  if (l) {
+    l.content = drawEls.names.value;
+    drawSaveLists();
+  }
+}
+
+function drawParseNames() {
+  // Parse text into [{name, weight}]; support `王小明 x3` syntax
+  const lines = drawEls.names.value.split(/\r?\n/);
+  const out = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(/^(.+?)\s*[xX*×](\d+)\s*$/);
+    if (m) {
+      const name = m[1].trim();
+      const w = Math.max(1, parseInt(m[2], 10) || 1);
+      if (name) out.push({ name, weight: w });
+    } else {
+      out.push({ name: line, weight: 1 });
+    }
+  }
+  return out;
+}
+
+function drawUpdateCount() {
+  const parsed = drawParseNames();
+  const uniq = parsed.length;
+  const total = parsed.reduce((s, p) => s + p.weight, 0);
+  drawEls.count.textContent = uniq === total
+    ? `${uniq} 位參加者`
+    : `${uniq} 位參加者（加權後 ${total}）`;
+}
+
+function drawRenderHistory() {
+  drawEls.historyChips.innerHTML = '';
+  if (DRAW.history.length === 0) {
+    drawEls.historyChips.innerHTML = '<span class="muted">（歷史為空）</span>';
+    return;
+  }
+  DRAW.history.forEach((n, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${escapeHtml(n)} <span class="x" data-idx="${idx}">×</span>`;
+    drawEls.historyChips.appendChild(chip);
+  });
+  drawEls.historyChips.querySelectorAll('.x').forEach(x => {
+    x.addEventListener('click', () => {
+      DRAW.history.splice(parseInt(x.dataset.idx, 10), 1);
+      drawSaveHistory();
+      drawRenderHistory();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function drawShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function drawSampleWeighted(pool, n, allowRepeat = false) {
+  // pool: [{name, weight}]; returns [names]
+  const chosen = [];
+  let items = pool.slice();
+  for (let i = 0; i < n; i++) {
+    const total = items.reduce((s, p) => s + p.weight, 0);
+    if (total <= 0) break;
+    let r = Math.random() * total;
+    let pickedIdx = -1;
+    for (let j = 0; j < items.length; j++) {
+      r -= items[j].weight;
+      if (r <= 0) { pickedIdx = j; break; }
+    }
+    if (pickedIdx < 0) pickedIdx = items.length - 1;
+    chosen.push(items[pickedIdx].name);
+    if (!allowRepeat) items.splice(pickedIdx, 1);
+  }
+  return chosen;
+}
+
+function drawChunkIntoGroups(names, g) {
+  const shuffled = drawShuffle(names);
+  const groups = Array.from({ length: g }, () => []);
+  shuffled.forEach((n, i) => groups[i % g].push(n));
+  return groups;
+}
+
+function drawAnimateReveal(results, isGroups) {
+  drawEls.stage.innerHTML = '';
+  drawEls.resultCard.classList.remove('hidden');
+  drawEls.qrCanvas.classList.add('hidden');
+
+  const parsed = drawParseNames();
+  const pool = parsed.map(p => p.name);
+  if (pool.length === 0) return;
+
+  if (isGroups) {
+    // results: array of groups (array of names)
+    drawEls.stage.innerHTML = '';
+    const spin = document.createElement('div');
+    spin.className = 'spin';
+    spin.textContent = '🎲 分組中...';
+    drawEls.stage.appendChild(spin);
+
+    let step = 0;
+    const spinTimer = setInterval(() => {
+      spin.textContent = '🎲 ' + pool[Math.floor(Math.random() * pool.length)];
+      step++;
+      if (step > 16) {
+        clearInterval(spinTimer);
+        drawEls.stage.innerHTML = '';
+        results.forEach((group, gi) => {
+          const lbl = document.createElement('div');
+          lbl.className = 'group-label';
+          lbl.textContent = `第 ${gi + 1} 組`;
+          drawEls.stage.appendChild(lbl);
+          group.forEach((name, i) => {
+            setTimeout(() => {
+              const div = document.createElement('div');
+              div.className = 'final';
+              div.textContent = name;
+              drawEls.stage.appendChild(div);
+            }, (gi * group.length + i) * 140);
+          });
+        });
+      }
+    }, 60);
+    return;
+  }
+
+  // Non-group: spin then reveal one by one
+  const spin = document.createElement('div');
+  spin.className = 'spin';
+  spin.textContent = '🎲 抽籤中...';
+  drawEls.stage.appendChild(spin);
+
+  let step = 0;
+  const spinTimer = setInterval(() => {
+    spin.textContent = '🎲 ' + pool[Math.floor(Math.random() * pool.length)];
+    step++;
+    if (step > 18) {
+      clearInterval(spinTimer);
+      spin.remove();
+      results.forEach((name, i) => {
+        setTimeout(() => {
+          const div = document.createElement('div');
+          div.className = 'final';
+          div.textContent = (results.length > 1 ? `${i + 1}. ` : '') + name;
+          drawEls.stage.appendChild(div);
+        }, i * 180);
+      });
+    }
+  }, 55);
+}
+
+function drawGo() {
+  drawPersistTextarea();
+  const parsed = drawParseNames();
+  if (parsed.length === 0) {
+    alert('名單是空的，請先輸入名單');
+    return;
+  }
+
+  let pool = parsed;
+  if (drawEls.exclude.checked && DRAW.history.length > 0) {
+    const set = new Set(DRAW.history);
+    pool = parsed.filter(p => !set.has(p.name));
+    if (pool.length === 0) {
+      alert('所有人都已經抽過了！請清空歷史或關閉排除');
+      return;
+    }
+  }
+
+  if (DRAW.mode === 'groups') {
+    const g = Math.max(2, parseInt(drawEls.g.value, 10) || 2);
+    if (pool.length < g) {
+      alert(`只有 ${pool.length} 人，無法分成 ${g} 組`);
+      return;
+    }
+    const groups = drawChunkIntoGroups(pool.map(p => p.name), g);
+    DRAW.lastResult = { mode: 'groups', groups };
+    drawAnimateReveal(groups, true);
+    // Groups don't record history
+  } else {
+    const n = Math.max(1, parseInt(drawEls.n.value, 10) || 1);
+    const allowRepeat = DRAW.mode === 'repeat';
+    const uniqCount = pool.length;
+    if (!allowRepeat && n > uniqCount) {
+      alert(`只有 ${uniqCount} 位可抽，無法抽出 ${n} 位不重複`);
+      return;
+    }
+    const winners = drawSampleWeighted(pool, n, allowRepeat);
+    DRAW.lastResult = { mode: DRAW.mode, winners };
+    drawAnimateReveal(winners, false);
+
+    // Record history (only unique mode)
+    if (DRAW.mode === 'unique') {
+      winners.forEach(w => { if (!DRAW.history.includes(w)) DRAW.history.push(w); });
+      drawSaveHistory();
+      drawRenderHistory();
+    }
+  }
+}
+
+function drawResultText() {
+  if (!DRAW.lastResult) return '';
+  if (DRAW.lastResult.mode === 'groups') {
+    return DRAW.lastResult.groups
+      .map((g, i) => `第 ${i + 1} 組：${g.join('、')}`)
+      .join('\n');
+  }
+  return DRAW.lastResult.winners.map((w, i) =>
+    DRAW.lastResult.winners.length > 1 ? `${i + 1}. ${w}` : w).join('\n');
+}
+
+/* Draw UI event bindings */
+drawEls.select.addEventListener('change', () => {
+  drawPersistTextarea();
+  DRAW.currentId = drawEls.select.value;
+  drawSaveLists();
+  drawLoadCurrentIntoTextarea();
+});
+
+drawEls.newBtn.addEventListener('click', () => {
+  drawPersistTextarea();
+  const name = prompt('新名單名稱：', '名單 ' + (DRAW.lists.length + 1));
+  if (!name) return;
+  const id = 'list-' + Date.now();
+  DRAW.lists.push({ id, name: name.trim(), content: '' });
+  DRAW.currentId = id;
+  drawSaveLists();
+  drawRenderSelect();
+  drawLoadCurrentIntoTextarea();
+});
+
+drawEls.renameBtn.addEventListener('click', () => {
+  const l = drawCurrentList();
+  if (!l) return;
+  const name = prompt('改名：', l.name);
+  if (!name) return;
+  l.name = name.trim();
+  drawSaveLists();
+  drawRenderSelect();
+});
+
+drawEls.deleteBtn.addEventListener('click', () => {
+  if (DRAW.lists.length <= 1) {
+    alert('至少要保留一個名單');
+    return;
+  }
+  const l = drawCurrentList();
+  if (!confirm(`刪除「${l.name}」？`)) return;
+  DRAW.lists = DRAW.lists.filter(x => x.id !== l.id);
+  DRAW.currentId = DRAW.lists[0].id;
+  drawSaveLists();
+  drawRenderSelect();
+  drawLoadCurrentIntoTextarea();
+});
+
+drawEls.names.addEventListener('input', () => {
+  drawUpdateCount();
+  drawPersistTextarea();
+});
+
+drawEls.modeSeg.querySelectorAll('button').forEach(b => {
+  b.addEventListener('click', () => {
+    drawEls.modeSeg.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    DRAW.mode = b.dataset.mode;
+    drawEls.nLabel.textContent = DRAW.mode === 'repeat' ? '抽幾次' : '抽幾位';
+    if (DRAW.mode === 'groups') {
+      drawEls.nField.classList.add('hidden');
+      drawEls.gField.classList.remove('hidden');
+    } else {
+      drawEls.nField.classList.remove('hidden');
+      drawEls.gField.classList.add('hidden');
+    }
+  });
+});
+
+drawEls.exclude.addEventListener('change', () => {
+  localStorage.setItem(DRAW.LS_EXCLUDE, drawEls.exclude.checked ? '1' : '0');
+});
+
+drawEls.go.addEventListener('click', drawGo);
+drawEls.redo.addEventListener('click', drawGo);
+
+drawEls.clearHistory.addEventListener('click', () => {
+  if (DRAW.history.length === 0) return;
+  if (!confirm('清空所有抽過的歷史？')) return;
+  DRAW.history = [];
+  drawSaveHistory();
+  drawRenderHistory();
+});
+
+drawEls.copy.addEventListener('click', async () => {
+  const txt = drawResultText();
+  if (!txt) return;
+  if (await copyToClipboard(txt)) {
+    drawEls.copy.textContent = '✅ 已複製';
+    setTimeout(() => drawEls.copy.textContent = '📋 複製結果', 1500);
+  }
+});
+
+drawEls.qr.addEventListener('click', () => {
+  const txt = drawResultText();
+  if (!txt) return;
+  if (drawEls.qrCanvas.classList.contains('hidden')) {
+    QRCode.toCanvas(drawEls.qrCanvas, txt, { width: 200, margin: 1 }, err => {
+      if (!err) drawEls.qrCanvas.classList.remove('hidden');
+    });
+  } else {
+    drawEls.qrCanvas.classList.add('hidden');
+  }
+});
+
+/* Init draw */
+drawLoad();
+drawRenderSelect();
+drawLoadCurrentIntoTextarea();
+drawRenderHistory();
 
 /* ============================================================
    HASH ROUTING
