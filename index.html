@@ -1,37 +1,929 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>PartyUp</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="refresh" content="0; url=https://futurestarai.com/partyup/">
-  <link rel="canonical" href="https://futurestarai.com/partyup/">
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: #0a0a0a;
-      color: #e8e8ea;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-    }
-    a {
-      background: linear-gradient(90deg, #00d2ff, #7b2ff7, #ff5fa2);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      text-decoration: none;
-      font-weight: bold;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PartyUp — 聚會互動工具</title>
+<meta name="description" content="PartyUp 聚會互動工具集：遠端猜拳、抽籤、配對、同步投票">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+:root {
+  --bg: #0a0a0a;
+  --panel: #141414;
+  --panel-2: #1a1a1d;
+  --border: #2a2a2e;
+  --text: #e8e8ea;
+  --muted: #888;
+  --accent-1: #00d2ff;
+  --accent-2: #7b2ff7;
+  --pink: #ff5fa2;
+  --ok: #4ade80;
+  --err: #ef4444;
+  --radius: 20px;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+button, input, textarea, select {
+  font-family: inherit;
+  color: inherit;
+}
+a { color: var(--accent-1); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Header */
+header {
+  padding: 24px 20px 12px;
+  text-align: center;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+}
+.logo .gradient {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2), var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.logo .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-1), var(--pink));
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+.tagline {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* Tabs */
+nav.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 20px;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+nav.tabs button {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+nav.tabs button:hover { border-color: var(--accent-1); }
+nav.tabs button.active {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  border-color: transparent;
+  color: #000;
+  font-weight: bold;
+}
+
+/* Main */
+main {
+  flex: 1;
+  padding: 20px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Cards */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: normal;
+}
+
+/* Forms */
+label {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+input[type="text"], textarea, select {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input[type="text"]:focus, textarea:focus, select:focus {
+  border-color: var(--accent-1);
+}
+textarea { min-height: 100px; resize: vertical; }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent-1); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.primary {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  color: #000;
+  font-weight: bold;
+  border-color: transparent;
+}
+.btn.danger { border-color: var(--err); color: var(--err); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* Hub cards */
+.tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.tool-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tool-card:hover {
+  border-color: var(--accent-1);
+  transform: translateY(-2px);
+}
+.tool-card .icon { font-size: 28px; margin-bottom: 8px; }
+.tool-card .name { font-weight: bold; margin-bottom: 4px; }
+.tool-card .desc { font-size: 12px; color: var(--muted); }
+.tool-card.soon { opacity: 0.55; cursor: not-allowed; }
+.tool-card.soon:hover { transform: none; border-color: var(--border); }
+.tool-card .badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* Status */
+.status {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  display: inline-block;
+}
+.status.ok { background: rgba(74, 222, 128, 0.15); color: var(--ok); }
+.status.err { background: rgba(239, 68, 68, 0.15); color: var(--err); }
+.status.wait { background: rgba(136, 136, 136, 0.2); color: var(--muted); }
+
+/* RPS game */
+.rps-hands {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+.rps-hand {
+  background: var(--panel-2);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.rps-hand .label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.rps-hand .emoji {
+  font-size: 64px;
+  line-height: 1;
+  margin: 10px 0;
+  min-height: 64px;
+}
+.rps-hand.shake .emoji { animation: shake 0.4s linear; }
+@keyframes shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25% { transform: translateX(-8px) rotate(-10deg); }
+  75% { transform: translateX(8px) rotate(10deg); }
+}
+.rps-choices {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.rps-choice {
+  font-size: 32px;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rps-choice:hover { border-color: var(--accent-1); transform: translateY(-2px); }
+.rps-choice.selected { border-color: var(--accent-2); background: rgba(123, 47, 247, 0.15); }
+.rps-choice:disabled { opacity: 0.4; cursor: not-allowed; }
+.rps-score {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.rps-result {
+  text-align: center;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 12px;
+  margin-top: 12px;
+  min-height: 28px;
+}
+.rps-result.win { color: var(--ok); }
+.rps-result.lose { color: var(--err); }
+.rps-result.draw { color: var(--accent-1); }
+
+/* Share box */
+.share-box {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--panel-2);
+  border-radius: 12px;
+  font-size: 13px;
+}
+.share-box .code {
+  font-size: 16px;
+  color: var(--accent-1);
+  word-break: break-all;
+  user-select: all;
+  margin: 4px 0;
+}
+.qr-canvas {
+  display: block;
+  margin: 8px auto 0;
+  background: #fff;
+  padding: 8px;
+  border-radius: 8px;
+  max-width: 180px;
+}
+
+/* Utils */
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); font-size: 12px; }
+.sep { border-top: 1px solid var(--border); margin: 16px 0; }
+.hidden { display: none !important; }
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 24px 20px;
+  color: var(--muted);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 24px;
+}
+footer .gradient {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2), var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: bold;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .logo { font-size: 26px; }
+  nav.tabs button { padding: 6px 10px; font-size: 13px; }
+  main { padding: 14px; }
+  .card { padding: 16px; }
+  .rps-hand .emoji { font-size: 48px; }
+  .rps-choice { font-size: 26px; padding: 8px 12px; }
+}
+</style>
 </head>
 <body>
-  <p>
-    PartyUp → 跳轉中…<br>
-    如果沒有自動跳轉，<a href="https://futurestarai.com/partyup/">點這裡</a>
-  </p>
+
+<header>
+  <div class="logo">
+    <span class="dot"></span>
+    <span class="gradient">PartyUp</span>
+  </div>
+  <div class="tagline">聚會互動工具 — 猜拳・抽籤・配對・同步</div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="home" class="active">首頁</button>
+  <button data-tab="rps">猜拳</button>
+  <button data-tab="draw">抽籤</button>
+  <button data-tab="pair">配對</button>
+  <button data-tab="remote">遠端同步</button>
+</nav>
+
+<main>
+
+<!-- 首頁 -->
+<section class="tab-panel active" id="tab-home">
+  <div class="card">
+    <h2>👋 歡迎使用 PartyUp</h2>
+    <p class="muted" style="font-size:14px;line-height:1.6">
+      一個聚會互動工具集。完全免費、不用安裝、不存任何資料在伺服器，全部在瀏覽器裡跑。<br>
+      P2P 連線用 PeerJS（WebRTC），直接裝置對裝置，中繼伺服器只幫忙建立連線。
+    </p>
+  </div>
+
+  <div class="tools">
+    <div class="tool-card" onclick="switchTab('rps')">
+      <div class="icon">✊✋✌️</div>
+      <div class="name">遠端猜拳</div>
+      <div class="desc">P2P 對戰、計分、再戰</div>
+    </div>
+    <div class="tool-card" onclick="switchTab('draw')">
+      <div class="icon">🎲</div>
+      <div class="name">抽籤</div>
+      <div class="desc">多名單、加權、排除歷史</div>
+    </div>
+    <div class="tool-card" onclick="switchTab('pair')">
+      <div class="icon">💘</div>
+      <div class="name">配對</div>
+      <div class="desc">一對一、秘密聖誕老人</div>
+    </div>
+    <div class="tool-card" onclick="switchTab('remote')">
+      <div class="icon">📡</div>
+      <div class="name">遠端同步</div>
+      <div class="desc">主持人抽、大家同步看</div>
+    </div>
+    <div class="tool-card soon">
+      <div class="icon">🗳️</div>
+      <div class="name">即時投票</div>
+      <div class="desc">VoteUp</div>
+      <span class="badge">開發中</span>
+    </div>
+    <div class="tool-card soon">
+      <div class="icon">⏱️</div>
+      <div class="name">倒數計時</div>
+      <div class="desc">TimerUp</div>
+      <span class="badge">開發中</span>
+    </div>
+  </div>
+</section>
+
+<!-- 猜拳 -->
+<section class="tab-panel" id="tab-rps">
+
+  <div class="card" id="rps-setup">
+    <h2>✊ 遠端猜拳</h2>
+    <p class="muted" style="font-size:13px">
+      建立房間或輸入朋友給你的房號加入。房號可以用中文、emoji、符號都行！
+    </p>
+
+    <div style="margin-top:16px">
+      <label>自訂房號（可留空自動產生）</label>
+      <input type="text" id="rps-room-input" placeholder="例如：派對包廂 🎉 或留空" maxlength="40">
+      <div class="muted" style="margin-top:4px">支援中文、emoji、空格。留空按「開房」會自動給你一串</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="rps-host-btn">🏠 開房</button>
+      <button class="btn" id="rps-join-btn">🚪 加入朋友的房間</button>
+    </div>
+
+    <div id="rps-status-row" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card hidden" id="rps-room">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h3 style="margin:0 0 4px">房間</h3>
+        <div style="font-size:18px;font-weight:bold" id="rps-room-name"></div>
+      </div>
+      <button class="btn danger" id="rps-leave-btn">離開</button>
+    </div>
+
+    <div class="share-box hidden" id="rps-share">
+      <div class="muted">分享連結給朋友：</div>
+      <div class="code" id="rps-share-url"></div>
+      <div class="row">
+        <button class="btn" id="rps-copy-btn">📋 複製連結</button>
+        <button class="btn" id="rps-qr-btn">📱 顯示 QR</button>
+      </div>
+      <canvas id="rps-qr-canvas" class="qr-canvas hidden"></canvas>
+    </div>
+
+    <div id="rps-connection-status" style="margin-top:12px"></div>
+
+    <div class="rps-hands hidden" id="rps-board">
+      <div class="rps-hand" id="rps-hand-me">
+        <div class="label">我</div>
+        <div class="emoji" id="rps-emoji-me">❔</div>
+      </div>
+      <div class="rps-hand" id="rps-hand-op">
+        <div class="label">對手</div>
+        <div class="emoji" id="rps-emoji-op">❔</div>
+      </div>
+    </div>
+
+    <div class="rps-result hidden" id="rps-result"></div>
+
+    <div class="rps-choices hidden" id="rps-choices">
+      <button class="rps-choice" data-choice="rock">✊</button>
+      <button class="rps-choice" data-choice="paper">✋</button>
+      <button class="rps-choice" data-choice="scissors">✌️</button>
+    </div>
+
+    <div class="rps-score hidden" id="rps-score-row">
+      <span>我：<b id="rps-score-me">0</b></span>
+      <span>平手：<b id="rps-score-draw">0</b></span>
+      <span>對手：<b id="rps-score-op">0</b></span>
+    </div>
+
+    <div class="btn-row hidden" id="rps-actions-row">
+      <button class="btn" id="rps-replay-btn">🔄 再戰</button>
+      <button class="btn" id="rps-reset-btn">♻️ 重設比分</button>
+    </div>
+  </div>
+</section>
+
+<!-- 抽籤 (開發中) -->
+<section class="tab-panel" id="tab-draw">
+  <div class="card">
+    <h2>🎲 抽籤</h2>
+    <p class="muted">這個 tab 正在重建中。下一版會有：多名單、加權、不重複/可重複/分組、排除歷史紀錄、QR 分享結果。</p>
+  </div>
+</section>
+
+<!-- 配對 (開發中) -->
+<section class="tab-panel" id="tab-pair">
+  <div class="card">
+    <h2>💘 配對</h2>
+    <p class="muted">這個 tab 正在重建中。下一版會有：一對一、A-gets-B、秘密聖誕老人（derangement 演算法）。</p>
+  </div>
+</section>
+
+<!-- 遠端同步 (開發中) -->
+<section class="tab-panel" id="tab-remote">
+  <div class="card">
+    <h2>📡 遠端同步抽籤</h2>
+    <p class="muted">這個 tab 正在重建中。下一版會有：主持人開房抽籤，多位觀眾同步看到抽籤動畫。</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <span class="gradient">PartyUp</span> by
+  <a href="https://futurestarai.com">FuturestarAI</a>
+  · 完全在瀏覽器端運行，不儲存資料
+</footer>
+
+<script>
+/* ============================================================
+   TABS
+============================================================ */
+const tabs = document.querySelectorAll('nav.tabs button');
+const panels = document.querySelectorAll('.tab-panel');
+
+function switchTab(name) {
+  tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  panels.forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (location.hash.replace('#', '').split('=')[0] !== name) {
+    history.replaceState(null, '', '#' + name);
+  }
+}
+tabs.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+/* ============================================================
+   UTILS
+============================================================ */
+function hashRoomName(str) {
+  // djb2 hash → 6 字元 base36，讓中文/emoji 房名也能轉成合法 PeerJS ID
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) + h) + str.charCodeAt(i);
+    h = h & 0x7fffffff;
+  }
+  return h.toString(36).padStart(6, '0').slice(0, 8);
+}
+
+function randomCode(len = 6) {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function setStatus(el, msg, type = 'wait') {
+  el.innerHTML = '<span class="status ' + type + '">' + msg + '</span>';
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    return true;
+  }
+}
+
+/* ============================================================
+   RPS GAME
+============================================================ */
+const RPS = {
+  peer: null,
+  conn: null,
+  isHost: false,
+  roomName: '',         // 使用者看得到的房名（中文/emoji OK）
+  peerId: '',           // PeerJS 用的安全 ID
+  myChoice: null,
+  opChoice: null,
+  score: { me: 0, op: 0, draw: 0 },
+  PREFIX: 'pu-rps-'     // PeerJS ID 命名空間
+};
+
+const rpsEls = {
+  setup: document.getElementById('rps-setup'),
+  room: document.getElementById('rps-room'),
+  roomInput: document.getElementById('rps-room-input'),
+  roomName: document.getElementById('rps-room-name'),
+  hostBtn: document.getElementById('rps-host-btn'),
+  joinBtn: document.getElementById('rps-join-btn'),
+  leaveBtn: document.getElementById('rps-leave-btn'),
+  statusRow: document.getElementById('rps-status-row'),
+  share: document.getElementById('rps-share'),
+  shareUrl: document.getElementById('rps-share-url'),
+  copyBtn: document.getElementById('rps-copy-btn'),
+  qrBtn: document.getElementById('rps-qr-btn'),
+  qrCanvas: document.getElementById('rps-qr-canvas'),
+  connStatus: document.getElementById('rps-connection-status'),
+  board: document.getElementById('rps-board'),
+  handMe: document.getElementById('rps-hand-me'),
+  handOp: document.getElementById('rps-hand-op'),
+  emojiMe: document.getElementById('rps-emoji-me'),
+  emojiOp: document.getElementById('rps-emoji-op'),
+  result: document.getElementById('rps-result'),
+  choices: document.getElementById('rps-choices'),
+  scoreRow: document.getElementById('rps-score-row'),
+  scoreMe: document.getElementById('rps-score-me'),
+  scoreOp: document.getElementById('rps-score-op'),
+  scoreDraw: document.getElementById('rps-score-draw'),
+  actions: document.getElementById('rps-actions-row'),
+  replayBtn: document.getElementById('rps-replay-btn'),
+  resetBtn: document.getElementById('rps-reset-btn')
+};
+
+const RPS_EMOJI = { rock: '✊', paper: '✋', scissors: '✌️' };
+
+function rpsToPeerId(roomName) {
+  // 房名 → PeerJS 合法 ID（字母數字 + - _）
+  return RPS.PREFIX + hashRoomName(roomName);
+}
+
+function rpsUpdateScore() {
+  rpsEls.scoreMe.textContent = RPS.score.me;
+  rpsEls.scoreOp.textContent = RPS.score.op;
+  rpsEls.scoreDraw.textContent = RPS.score.draw;
+}
+
+function rpsJudge(me, op) {
+  if (me === op) return 'draw';
+  if ((me === 'rock' && op === 'scissors') ||
+      (me === 'paper' && op === 'rock') ||
+      (me === 'scissors' && op === 'paper')) return 'win';
+  return 'lose';
+}
+
+function rpsReveal() {
+  if (!RPS.myChoice || !RPS.opChoice) return;
+  rpsEls.handMe.classList.add('shake');
+  rpsEls.handOp.classList.add('shake');
+  setTimeout(() => {
+    rpsEls.emojiMe.textContent = RPS_EMOJI[RPS.myChoice];
+    rpsEls.emojiOp.textContent = RPS_EMOJI[RPS.opChoice];
+    rpsEls.handMe.classList.remove('shake');
+    rpsEls.handOp.classList.remove('shake');
+
+    const r = rpsJudge(RPS.myChoice, RPS.opChoice);
+    rpsEls.result.className = 'rps-result ' + r;
+    rpsEls.result.textContent = { win: '🎉 你贏了', lose: '😢 你輸了', draw: '🤝 平手' }[r];
+    rpsEls.result.classList.remove('hidden');
+
+    if (r === 'win') RPS.score.me++;
+    else if (r === 'lose') RPS.score.op++;
+    else RPS.score.draw++;
+    rpsUpdateScore();
+
+    rpsEls.actions.classList.remove('hidden');
+  }, 420);
+}
+
+function rpsShowRoom() {
+  rpsEls.setup.classList.add('hidden');
+  rpsEls.room.classList.remove('hidden');
+  rpsEls.roomName.textContent = RPS.roomName;
+}
+
+function rpsShowShare() {
+  const url = location.origin + location.pathname + '#rps=' + encodeURIComponent(RPS.roomName);
+  rpsEls.shareUrl.textContent = url;
+  rpsEls.share.classList.remove('hidden');
+}
+
+function rpsHideShare() {
+  rpsEls.share.classList.add('hidden');
+}
+
+function rpsShowBoard() {
+  rpsEls.board.classList.remove('hidden');
+  rpsEls.choices.classList.remove('hidden');
+  rpsEls.scoreRow.classList.remove('hidden');
+}
+
+function rpsResetBoard(keepScore = true) {
+  RPS.myChoice = null;
+  RPS.opChoice = null;
+  rpsEls.emojiMe.textContent = '❔';
+  rpsEls.emojiOp.textContent = '❔';
+  rpsEls.result.classList.add('hidden');
+  rpsEls.actions.classList.add('hidden');
+  document.querySelectorAll('.rps-choice').forEach(b => {
+    b.classList.remove('selected');
+    b.disabled = false;
+  });
+  if (!keepScore) {
+    RPS.score = { me: 0, op: 0, draw: 0 };
+    rpsUpdateScore();
+  }
+}
+
+function rpsLeave() {
+  try { if (RPS.conn) RPS.conn.close(); } catch (e) {}
+  try { if (RPS.peer) RPS.peer.destroy(); } catch (e) {}
+  RPS.peer = null;
+  RPS.conn = null;
+  RPS.isHost = false;
+  RPS.myChoice = null;
+  RPS.opChoice = null;
+  RPS.score = { me: 0, op: 0, draw: 0 };
+  rpsEls.room.classList.add('hidden');
+  rpsEls.setup.classList.remove('hidden');
+  rpsHideShare();
+  rpsEls.board.classList.add('hidden');
+  rpsEls.choices.classList.add('hidden');
+  rpsEls.scoreRow.classList.add('hidden');
+  rpsEls.actions.classList.add('hidden');
+  rpsEls.statusRow.innerHTML = '';
+  rpsEls.connStatus.innerHTML = '';
+  if (location.hash.startsWith('#rps=')) history.replaceState(null, '', '#rps');
+}
+
+function rpsSend(data) {
+  if (RPS.conn && RPS.conn.open) {
+    try { RPS.conn.send(data); } catch (e) {}
+  }
+}
+
+function rpsBindConn(conn) {
+  RPS.conn = conn;
+
+  conn.on('open', () => {
+    setStatus(rpsEls.connStatus, '✅ 已連線', 'ok');
+    rpsShowBoard();
+    rpsHideShare();
+  });
+
+  conn.on('data', data => {
+    if (!data || !data.type) return;
+    if (data.type === 'choice') {
+      RPS.opChoice = data.value;
+      if (RPS.myChoice) rpsReveal();
+      else setStatus(rpsEls.connStatus, '✅ 對手已出招，等你出招', 'ok');
+    } else if (data.type === 'replay') {
+      rpsResetBoard(true);
+      setStatus(rpsEls.connStatus, '🔄 對手要求再戰', 'ok');
+    } else if (data.type === 'reset') {
+      rpsResetBoard(false);
+      setStatus(rpsEls.connStatus, '♻️ 比分已重設', 'ok');
+    }
+  });
+
+  conn.on('close', () => {
+    setStatus(rpsEls.connStatus, '⚠️ 對手離線', 'err');
+    rpsEls.choices.classList.add('hidden');
+  });
+
+  conn.on('error', err => {
+    setStatus(rpsEls.connStatus, '⚠️ 連線錯誤：' + err.type, 'err');
+  });
+}
+
+function rpsCreatePeer(peerId) {
+  return new Promise((resolve, reject) => {
+    const peer = new Peer(peerId);
+    let opened = false;
+    peer.on('open', id => {
+      opened = true;
+      resolve(peer);
+    });
+    peer.on('error', err => {
+      if (!opened) reject(err);
+      else {
+        setStatus(rpsEls.connStatus, '⚠️ ' + err.type, 'err');
+      }
+    });
+  });
+}
+
+async function rpsHost(roomName) {
+  try {
+    RPS.isHost = true;
+    RPS.roomName = roomName;
+    RPS.peerId = rpsToPeerId(roomName);
+    setStatus(rpsEls.statusRow, '⏳ 建立房間中...', 'wait');
+    RPS.peer = await rpsCreatePeer(RPS.peerId);
+    rpsShowRoom();
+    rpsShowShare();
+    setStatus(rpsEls.connStatus, '⏳ 等待朋友加入...', 'wait');
+    RPS.peer.on('connection', conn => rpsBindConn(conn));
+  } catch (err) {
+    if (err && err.type === 'unavailable-id') {
+      setStatus(rpsEls.statusRow, '⚠️ 這個房號有人在用，請換一個或按幾秒後重試', 'err');
+    } else {
+      setStatus(rpsEls.statusRow, '⚠️ 開房失敗：' + (err.type || err.message || err), 'err');
+    }
+    RPS.peer = null;
+    RPS.isHost = false;
+  }
+}
+
+async function rpsJoin(roomName) {
+  try {
+    RPS.isHost = false;
+    RPS.roomName = roomName;
+    RPS.peerId = rpsToPeerId(roomName);
+    setStatus(rpsEls.statusRow, '⏳ 連線中...', 'wait');
+    // 本機用隨機 id 避免和 host 撞
+    RPS.peer = await rpsCreatePeer(RPS.PREFIX + 'guest-' + randomCode(6));
+    rpsShowRoom();
+    setStatus(rpsEls.connStatus, '⏳ 連線中...', 'wait');
+    const conn = RPS.peer.connect(RPS.peerId, { reliable: true });
+    rpsBindConn(conn);
+  } catch (err) {
+    setStatus(rpsEls.statusRow, '⚠️ 加入失敗：' + (err.type || err.message || err), 'err');
+    RPS.peer = null;
+  }
+}
+
+/* RPS Event bindings */
+rpsEls.hostBtn.addEventListener('click', () => {
+  let name = rpsEls.roomInput.value.trim();
+  if (!name) {
+    name = '房間-' + randomCode(5);
+    rpsEls.roomInput.value = name;
+  }
+  rpsHost(name);
+});
+
+rpsEls.joinBtn.addEventListener('click', () => {
+  const name = rpsEls.roomInput.value.trim();
+  if (!name) {
+    setStatus(rpsEls.statusRow, '⚠️ 請輸入朋友給你的房號', 'err');
+    return;
+  }
+  rpsJoin(name);
+});
+
+rpsEls.leaveBtn.addEventListener('click', rpsLeave);
+
+rpsEls.copyBtn.addEventListener('click', async () => {
+  const url = rpsEls.shareUrl.textContent;
+  if (await copyToClipboard(url)) {
+    rpsEls.copyBtn.textContent = '✅ 已複製';
+    setTimeout(() => rpsEls.copyBtn.textContent = '📋 複製連結', 1500);
+  }
+});
+
+rpsEls.qrBtn.addEventListener('click', () => {
+  const url = rpsEls.shareUrl.textContent;
+  if (rpsEls.qrCanvas.classList.contains('hidden')) {
+    QRCode.toCanvas(rpsEls.qrCanvas, url, { width: 180, margin: 1 }, err => {
+      if (!err) rpsEls.qrCanvas.classList.remove('hidden');
+    });
+  } else {
+    rpsEls.qrCanvas.classList.add('hidden');
+  }
+});
+
+document.querySelectorAll('.rps-choice').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (RPS.myChoice) return;
+    RPS.myChoice = btn.dataset.choice;
+    btn.classList.add('selected');
+    document.querySelectorAll('.rps-choice').forEach(b => b.disabled = true);
+    rpsSend({ type: 'choice', value: RPS.myChoice });
+    if (RPS.opChoice) rpsReveal();
+    else setStatus(rpsEls.connStatus, '✅ 你已出招，等對手...', 'ok');
+  });
+});
+
+rpsEls.replayBtn.addEventListener('click', () => {
+  rpsResetBoard(true);
+  rpsSend({ type: 'replay' });
+  setStatus(rpsEls.connStatus, '🔄 再戰！', 'ok');
+});
+
+rpsEls.resetBtn.addEventListener('click', () => {
+  rpsResetBoard(false);
+  rpsSend({ type: 'reset' });
+  setStatus(rpsEls.connStatus, '♻️ 比分已重設', 'ok');
+});
+
+/* ============================================================
+   HASH ROUTING
+============================================================ */
+function applyHash() {
+  const hash = location.hash.replace(/^#/, '');
+  if (!hash) return;
+
+  // #rps=<房名>
+  if (hash.startsWith('rps=')) {
+    const roomName = decodeURIComponent(hash.slice(4));
+    if (roomName) {
+      switchTab('rps');
+      rpsEls.roomInput.value = roomName;
+      // 自動填但不自動加入，讓使用者按「加入」
+      setStatus(rpsEls.statusRow, '💡 點「加入朋友的房間」進入 ' + roomName, 'wait');
+    }
+    return;
+  }
+
+  // 單純 tab 切換：#rps / #draw / #pair / #remote / #home
+  const tabName = hash.split('=')[0];
+  if (['home', 'rps', 'draw', 'pair', 'remote'].includes(tabName)) {
+    switchTab(tabName);
+  }
+}
+window.addEventListener('hashchange', applyHash);
+applyHash();
+
+</script>
+
 </body>
 </html>
