@@ -3096,6 +3096,18 @@ function startLoop(once, intervalMs) {
 }
 
 const playingSounds = {};  // key -> stopFn
+let activeSoundBtn = null;
+
+function stopAllSounds() {
+  Object.keys(playingSounds).forEach(k => {
+    try { playingSounds[k](); } catch (e) {}
+    delete playingSounds[k];
+  });
+  if (activeSoundBtn) {
+    activeSoundBtn.classList.remove('playing');
+    activeSoundBtn = null;
+  }
+}
 
 const soundGrid = document.getElementById('sound-grid');
 SOUND_LIB.forEach(s => {
@@ -3105,17 +3117,15 @@ SOUND_LIB.forEach(s => {
   btn.addEventListener('click', async () => {
     try {
       await ensureAudio();
-      if (playingSounds[s.key]) {
-        playingSounds[s.key]();
-        delete playingSounds[s.key];
-        btn.classList.remove('playing');
-      } else {
-        let stopFn;
-        if (s.drone) stopFn = startDrone(s.drone);
-        else stopFn = startLoop(s.once, s.interval);
-        playingSounds[s.key] = stopFn;
-        btn.classList.add('playing');
-      }
+      const wasThisPlaying = !!playingSounds[s.key];
+      stopAllSounds();
+      if (wasThisPlaying) return;  // toggling the active one off
+      let stopFn;
+      if (s.drone) stopFn = startDrone(s.drone);
+      else stopFn = startLoop(s.once, s.interval);
+      playingSounds[s.key] = stopFn;
+      activeSoundBtn = btn;
+      btn.classList.add('playing');
     } catch (e) { console.error(e); }
   });
   soundGrid.appendChild(btn);
