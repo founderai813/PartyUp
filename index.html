@@ -485,6 +485,185 @@ textarea { min-height: 100px; resize: vertical; }
   100% { transform: scale(1) rotate(0); opacity: 1; }
 }
 
+/* Timer */
+.timer-display {
+  font-size: 72px;
+  font-weight: 900;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  padding: 30px 10px;
+  background: var(--panel-2);
+  border-radius: var(--radius);
+  margin: 12px 0;
+  background: linear-gradient(135deg, #141414, #1a1a1d);
+}
+.timer-display.warn { color: #f59e0b; }
+.timer-display.danger { color: var(--err); animation: pulseRed 0.6s ease-in-out infinite; }
+@keyframes pulseRed {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.timer-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.timer-presets button { padding: 6px 12px; font-size: 13px; }
+
+/* Vote */
+.vote-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.vote-bar-label { flex: 0 0 auto; min-width: 80px; font-size: 14px; }
+.vote-bar-track {
+  flex: 1;
+  height: 26px;
+  background: var(--panel-2);
+  border-radius: 13px;
+  overflow: hidden;
+  position: relative;
+}
+.vote-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  transition: width 0.4s ease;
+}
+.vote-bar-count {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: bold;
+}
+.vote-option-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  font-size: 16px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+.vote-option-btn:hover:not(:disabled) { border-color: var(--accent-1); }
+.vote-option-btn.voted {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  color: #000;
+  font-weight: bold;
+  border-color: transparent;
+}
+.vote-option-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Sound board */
+.sound-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+}
+.sound-btn {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.1s;
+  color: var(--text);
+}
+.sound-btn:hover { border-color: var(--accent-1); transform: translateY(-2px); }
+.sound-btn:active { transform: scale(0.95); }
+.sound-btn .emoji { font-size: 36px; line-height: 1; }
+.sound-btn .name { font-size: 12px; color: var(--muted); }
+
+/* Undercover card */
+.role-card {
+  background: linear-gradient(135deg, var(--panel-2), #252530);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 30px 20px;
+  text-align: center;
+  margin: 16px 0;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.role-card.hidden-card::before {
+  content: "👇 點一下看角色";
+  color: var(--muted);
+  font-size: 14px;
+}
+.role-card.revealed { cursor: default; }
+.role-card .role-name {
+  font-size: 28px;
+  font-weight: 900;
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2), var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: popIn 0.5s both;
+}
+.role-card .role-word {
+  font-size: 42px;
+  font-weight: 900;
+  margin: 10px 0;
+  animation: popIn 0.5s both;
+}
+.role-card .role-hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.role-card.hidden-card > * { display: none; }
+
+.player-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.player-chip {
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+.player-chip.assigned { border-color: var(--ok); }
+
+/* Couple quiz */
+.quiz-answer {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin: 8px 0;
+  font-size: 18px;
+}
+.quiz-answer .who { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.quiz-answer.match { border-color: var(--ok); background: rgba(74,222,128,0.08); }
+.quiz-answer.mismatch { border-color: var(--err); background: rgba(239,68,68,0.08); }
+.quiz-banner {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 14px;
+  border-radius: 14px;
+  margin: 12px 0;
+}
+.quiz-banner.match { background: rgba(74,222,128,0.15); color: var(--ok); }
+.quiz-banner.mismatch { background: rgba(239,68,68,0.15); color: var(--err); }
+
 /* Utils */
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); font-size: 12px; }
@@ -535,6 +714,11 @@ footer .gradient {
   <button data-tab="draw">抽籤</button>
   <button data-tab="pair">配對</button>
   <button data-tab="remote">遠端同步</button>
+  <button data-tab="vote">投票</button>
+  <button data-tab="timer">計時</button>
+  <button data-tab="sound">音效</button>
+  <button data-tab="undercover">臥底</button>
+  <button data-tab="quiz">默契</button>
 </nav>
 
 <main>
@@ -570,17 +754,30 @@ footer .gradient {
       <div class="name">遠端同步</div>
       <div class="desc">主持人抽、大家同步看</div>
     </div>
-    <div class="tool-card soon">
+    <div class="tool-card" onclick="switchTab('vote')">
       <div class="icon">🗳️</div>
       <div class="name">即時投票</div>
-      <div class="desc">VoteUp</div>
-      <span class="badge">開發中</span>
+      <div class="desc">主持人出題、即時條狀圖</div>
     </div>
-    <div class="tool-card soon">
+    <div class="tool-card" onclick="switchTab('timer')">
       <div class="icon">⏱️</div>
       <div class="name">倒數計時</div>
-      <div class="desc">TimerUp</div>
-      <span class="badge">開發中</span>
+      <div class="desc">大螢幕投影、到時警示</div>
+    </div>
+    <div class="tool-card" onclick="switchTab('sound')">
+      <div class="icon">🔊</div>
+      <div class="name">音效板</div>
+      <div class="desc">掌聲、鼓聲、鈴鈴、慘叫</div>
+    </div>
+    <div class="tool-card" onclick="switchTab('undercover')">
+      <div class="icon">🕵️</div>
+      <div class="name">誰是臥底</div>
+      <div class="desc">身份卡分發（狼人殺也能用）</div>
+    </div>
+    <div class="tool-card" onclick="switchTab('quiz')">
+      <div class="icon">💞</div>
+      <div class="name">默契問答</div>
+      <div class="desc">兩人同題、揭曉合不合</div>
     </div>
   </div>
 </section>
@@ -876,6 +1073,294 @@ footer .gradient {
     </div>
   </div>
 
+</section>
+
+<!-- 投票 -->
+<section class="tab-panel" id="tab-vote">
+  <div class="card" id="vote-setup">
+    <h2>🗳️ 即時投票</h2>
+    <p class="muted" style="font-size:13px">主持人出題，觀眾用手機投票，結果即時顯示條狀圖。</p>
+
+    <div style="margin-top:14px">
+      <label>房號（你自己決定）</label>
+      <input type="text" id="vote-room-input" placeholder="例如：晚餐吃什麼" maxlength="40" autocomplete="off">
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="vote-host-btn">🏠 主持人</button>
+      <button class="btn" id="vote-join-btn">🙋 我要投票</button>
+    </div>
+    <div id="vote-status-row" style="margin-top:10px"></div>
+  </div>
+
+  <!-- Host -->
+  <div class="card hidden" id="vote-host-panel">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h3 style="margin:0 0 4px">🏠 主持人</h3>
+        <div style="font-size:15px;font-weight:bold" id="vote-host-roomname"></div>
+      </div>
+      <button class="btn danger" id="vote-host-leave">關閉</button>
+    </div>
+    <div id="vote-host-conn" style="margin-top:10px"></div>
+
+    <div class="share-box">
+      <div class="muted">分享連結：</div>
+      <div class="code" id="vote-host-share-url"></div>
+      <div class="row">
+        <button class="btn" id="vote-host-copy">📋 複製</button>
+        <button class="btn" id="vote-host-qr">📱 QR</button>
+      </div>
+      <canvas id="vote-host-qr-canvas" class="qr-canvas hidden"></canvas>
+    </div>
+
+    <div class="sep"></div>
+    <label>題目</label>
+    <input type="text" id="vote-question" placeholder="例如：今晚吃什麼？">
+    <label style="margin-top:10px">選項（一行一個）</label>
+    <textarea id="vote-options" placeholder="火鍋&#10;燒烤&#10;日本料理&#10;隨便"></textarea>
+    <div class="btn-row">
+      <button class="btn primary" id="vote-host-start">🚀 開始投票（推給觀眾）</button>
+      <button class="btn" id="vote-host-close">🛑 結束投票</button>
+    </div>
+
+    <div id="vote-host-results" style="margin-top:14px"></div>
+  </div>
+
+  <!-- Viewer -->
+  <div class="card hidden" id="vote-viewer-panel">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h3 style="margin:0 0 4px">🙋 投票中</h3>
+        <div style="font-size:15px;font-weight:bold" id="vote-viewer-roomname"></div>
+      </div>
+      <button class="btn danger" id="vote-viewer-leave">離開</button>
+    </div>
+    <div id="vote-viewer-conn" style="margin-top:10px"></div>
+
+    <div id="vote-viewer-question" style="margin-top:12px;font-size:18px;font-weight:bold"></div>
+    <div id="vote-viewer-options" style="margin-top:10px"></div>
+    <div id="vote-viewer-results" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<!-- 倒數計時 -->
+<section class="tab-panel" id="tab-timer">
+  <div class="card">
+    <h2>⏱️ 倒數計時</h2>
+
+    <div class="timer-display" id="timer-display">00:00</div>
+
+    <div class="row" style="gap:6px">
+      <label style="flex:1;margin-bottom:0">分鐘</label>
+      <label style="flex:1;margin-bottom:0">秒</label>
+    </div>
+    <div class="row" style="gap:6px">
+      <input type="number" id="timer-min" min="0" max="999" value="5" style="flex:1">
+      <input type="number" id="timer-sec" min="0" max="59" value="0" style="flex:1">
+    </div>
+
+    <div class="timer-presets">
+      <button class="btn" data-sec="30">30 秒</button>
+      <button class="btn" data-sec="60">1 分</button>
+      <button class="btn" data-sec="180">3 分</button>
+      <button class="btn" data-sec="300">5 分</button>
+      <button class="btn" data-sec="600">10 分</button>
+      <button class="btn" data-sec="1800">30 分</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="timer-start">▶️ 開始</button>
+      <button class="btn" id="timer-pause">⏸️ 暫停</button>
+      <button class="btn" id="timer-reset">🔁 重設</button>
+    </div>
+
+    <label class="toggle">
+      <input type="checkbox" id="timer-beep" checked>
+      <span>結束時嗶嗶響</span>
+    </label>
+  </div>
+</section>
+
+<!-- 音效板 -->
+<section class="tab-panel" id="tab-sound">
+  <div class="card">
+    <h2>🔊 口袋音效板</h2>
+    <p class="muted" style="font-size:13px">點按鈕播放音效。適合主持人現場氣氛。</p>
+    <div class="sound-grid" id="sound-grid"></div>
+    <div class="muted" style="font-size:11px;margin-top:10px">
+      全部用 Web Audio API 即時合成，不用下載音檔。
+    </div>
+  </div>
+</section>
+
+<!-- 誰是臥底 -->
+<section class="tab-panel" id="tab-undercover">
+  <div class="card" id="uc-setup">
+    <h2>🕵️ 誰是臥底 / 角色卡</h2>
+    <p class="muted" style="font-size:13px">
+      主持人設定角色，玩家手機加入後各自收到私密角色卡。適合臥底、狼人殺、各種需要秘密身份的遊戲。
+    </p>
+
+    <div style="margin-top:14px">
+      <label>房號（你自己決定）</label>
+      <input type="text" id="uc-room-input" placeholder="例如：公司尾牙 🕵️" maxlength="40" autocomplete="off">
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="uc-host-btn">🎩 我是主持人</button>
+      <button class="btn" id="uc-join-btn">🙋 我是玩家</button>
+    </div>
+    <div id="uc-status-row" style="margin-top:10px"></div>
+  </div>
+
+  <!-- Host -->
+  <div class="card hidden" id="uc-host-panel">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h3 style="margin:0 0 4px">🎩 主持人</h3>
+        <div style="font-size:15px;font-weight:bold" id="uc-host-roomname"></div>
+      </div>
+      <button class="btn danger" id="uc-host-leave">關閉</button>
+    </div>
+    <div id="uc-host-conn" style="margin-top:10px"></div>
+
+    <div class="share-box">
+      <div class="muted">分享連結：</div>
+      <div class="code" id="uc-host-share-url"></div>
+      <div class="row">
+        <button class="btn" id="uc-host-copy">📋 複製</button>
+        <button class="btn" id="uc-host-qr">📱 QR</button>
+      </div>
+      <canvas id="uc-host-qr-canvas" class="qr-canvas hidden"></canvas>
+    </div>
+
+    <div class="sep"></div>
+    <label>模式</label>
+    <div class="seg" id="uc-mode-seg">
+      <button data-mode="undercover" class="active">誰是臥底</button>
+      <button data-mode="custom">自訂角色</button>
+    </div>
+
+    <div id="uc-mode-undercover" style="margin-top:10px">
+      <label>平民詞（多數人拿到的）</label>
+      <input type="text" id="uc-civ-word" placeholder="例如：可樂">
+      <label style="margin-top:8px">臥底詞（少數人拿到的）</label>
+      <input type="text" id="uc-spy-word" placeholder="例如：雪碧">
+      <label style="margin-top:8px">臥底人數</label>
+      <input type="number" id="uc-spy-count" min="1" value="1">
+    </div>
+
+    <div id="uc-mode-custom" class="hidden" style="margin-top:10px">
+      <label>角色清單（一行一個，可重複）</label>
+      <textarea id="uc-roles" placeholder="狼人&#10;狼人&#10;預言家&#10;女巫&#10;獵人&#10;村民&#10;村民&#10;村民"></textarea>
+      <div class="muted" style="margin-top:4px">角色數量要 ≥ 玩家人數（會隨機分發）</div>
+    </div>
+
+    <label style="margin-top:12px">玩家名單（等大家加入後自動填上）</label>
+    <div class="player-list" id="uc-players"></div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="uc-host-deal">🎴 分發角色</button>
+      <button class="btn" id="uc-host-reveal">👁️ 主持人偷看答案</button>
+    </div>
+    <div id="uc-host-answer" style="margin-top:12px"></div>
+  </div>
+
+  <!-- Player -->
+  <div class="card hidden" id="uc-player-panel">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h3 style="margin:0 0 4px">🙋 玩家</h3>
+        <div style="font-size:15px;font-weight:bold" id="uc-player-roomname"></div>
+      </div>
+      <button class="btn danger" id="uc-player-leave">離開</button>
+    </div>
+
+    <div id="uc-player-conn" style="margin-top:10px"></div>
+
+    <div id="uc-player-name-wrap" style="margin-top:12px">
+      <label>你的暱稱</label>
+      <input type="text" id="uc-player-name" placeholder="例如：小明" maxlength="20">
+      <div class="btn-row">
+        <button class="btn primary" id="uc-player-submit-name">確定名字</button>
+      </div>
+    </div>
+
+    <div id="uc-player-waiting" class="hidden" style="margin-top:12px">
+      <div class="muted">🎲 等主持人分發角色...</div>
+    </div>
+
+    <div id="uc-player-card-wrap" class="hidden" style="margin-top:12px">
+      <div class="role-card hidden-card" id="uc-player-card">
+        <div class="role-name" id="uc-card-role"></div>
+        <div class="role-word" id="uc-card-word"></div>
+        <div class="role-hint" id="uc-card-hint"></div>
+      </div>
+      <div class="muted" style="font-size:12px;text-align:center">
+        ⚠️ 不要給別人看！
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 默契問答 -->
+<section class="tab-panel" id="tab-quiz">
+  <div class="card" id="qz-setup">
+    <h2>💞 默契問答</h2>
+    <p class="muted" style="font-size:13px">
+      兩個人各看自己手機，同時回答同一題，一起揭曉看合不合。適合情侶、閨蜜、同事測默契。
+    </p>
+
+    <div style="margin-top:14px">
+      <label>房號（你自己決定）</label>
+      <input type="text" id="qz-room-input" placeholder="例如：我跟阿明" maxlength="40" autocomplete="off">
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="qz-host-btn">🏠 開房</button>
+      <button class="btn" id="qz-join-btn">🚪 加入</button>
+    </div>
+    <div id="qz-status-row" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card hidden" id="qz-panel">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h3 style="margin:0 0 4px">💞 默契問答</h3>
+        <div style="font-size:15px;font-weight:bold" id="qz-roomname"></div>
+      </div>
+      <button class="btn danger" id="qz-leave">離開</button>
+    </div>
+    <div id="qz-conn-status" style="margin-top:10px"></div>
+
+    <div id="qz-share" class="share-box hidden">
+      <div class="muted">分享連結給對方：</div>
+      <div class="code" id="qz-share-url"></div>
+      <div class="row">
+        <button class="btn" id="qz-copy">📋 複製</button>
+        <button class="btn" id="qz-qr">📱 QR</button>
+      </div>
+      <canvas id="qz-qr-canvas" class="qr-canvas hidden"></canvas>
+    </div>
+
+    <div id="qz-play" class="hidden" style="margin-top:14px">
+      <label>這一題問：</label>
+      <input type="text" id="qz-question" placeholder="例如：你最討厭的食物是？">
+      <div class="muted" style="margin-top:4px;font-size:11px">題目會同步給對方</div>
+      <div class="btn-row">
+        <button class="btn" id="qz-suggest">🎲 隨機題目</button>
+      </div>
+
+      <div class="sep"></div>
+      <label>你的答案（對方看不到，直到兩人都送出）</label>
+      <input type="text" id="qz-my-answer" placeholder="輸入答案">
+      <div class="btn-row">
+        <button class="btn primary" id="qz-submit">✅ 送出答案</button>
+        <button class="btn" id="qz-next">➡️ 下一題</button>
+      </div>
+
+      <div id="qz-reveal" style="margin-top:14px"></div>
+      <div class="muted" style="margin-top:10px;font-size:12px" id="qz-score">默契分數：0 / 0</div>
+    </div>
+  </div>
 </section>
 
 </main>
@@ -2295,6 +2780,132 @@ rmEls.hostMode.querySelectorAll('button').forEach(b => {
 });
 
 rmEls.hostGo.addEventListener('click', rmHostGo);
+
+/* ============================================================
+   TIMER (COUNTDOWN)
+============================================================ */
+const TIMER = {
+  total: 0,      // target seconds
+  remaining: 0,
+  running: false,
+  tickHandle: null,
+  endAt: 0
+};
+
+const timerEls = {
+  display: document.getElementById('timer-display'),
+  min: document.getElementById('timer-min'),
+  sec: document.getElementById('timer-sec'),
+  presets: document.querySelectorAll('.timer-presets button'),
+  start: document.getElementById('timer-start'),
+  pause: document.getElementById('timer-pause'),
+  reset: document.getElementById('timer-reset'),
+  beep: document.getElementById('timer-beep')
+};
+
+function timerFormat(s) {
+  s = Math.max(0, Math.ceil(s));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+}
+
+function timerReadInputs() {
+  const m = Math.max(0, parseInt(timerEls.min.value, 10) || 0);
+  const s = Math.max(0, Math.min(59, parseInt(timerEls.sec.value, 10) || 0));
+  return m * 60 + s;
+}
+
+function timerRender() {
+  timerEls.display.textContent = timerFormat(TIMER.remaining);
+  timerEls.display.classList.remove('warn', 'danger');
+  if (TIMER.running && TIMER.remaining <= 10 && TIMER.remaining > 3) {
+    timerEls.display.classList.add('warn');
+  } else if (TIMER.running && TIMER.remaining <= 3 && TIMER.remaining > 0) {
+    timerEls.display.classList.add('danger');
+  }
+}
+
+function timerTick() {
+  TIMER.remaining = Math.max(0, (TIMER.endAt - Date.now()) / 1000);
+  timerRender();
+  if (TIMER.remaining <= 0) {
+    timerStop();
+    if (timerEls.beep.checked) timerBeep();
+  }
+}
+
+function timerBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const beepOnce = (freq, start, dur) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.value = 0;
+      osc.connect(g).connect(ctx.destination);
+      osc.start(ctx.currentTime + start);
+      g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + start + 0.02);
+      g.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
+      osc.stop(ctx.currentTime + start + dur + 0.02);
+    };
+    beepOnce(880, 0, 0.2);
+    beepOnce(880, 0.3, 0.2);
+    beepOnce(1320, 0.6, 0.4);
+  } catch (e) {}
+}
+
+function timerStart() {
+  if (TIMER.running) return;
+  if (TIMER.remaining <= 0) {
+    TIMER.total = timerReadInputs();
+    TIMER.remaining = TIMER.total;
+    if (TIMER.remaining <= 0) return;
+  }
+  TIMER.endAt = Date.now() + TIMER.remaining * 1000;
+  TIMER.running = true;
+  TIMER.tickHandle = setInterval(timerTick, 100);
+  timerRender();
+}
+
+function timerPause() {
+  if (!TIMER.running) return;
+  TIMER.running = false;
+  clearInterval(TIMER.tickHandle);
+  TIMER.tickHandle = null;
+  timerRender();
+}
+
+function timerStop() {
+  TIMER.running = false;
+  clearInterval(TIMER.tickHandle);
+  TIMER.tickHandle = null;
+}
+
+function timerReset() {
+  timerStop();
+  TIMER.total = timerReadInputs();
+  TIMER.remaining = TIMER.total;
+  timerRender();
+}
+
+timerEls.presets.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const sec = parseInt(btn.dataset.sec, 10);
+    timerEls.min.value = Math.floor(sec / 60);
+    timerEls.sec.value = sec % 60;
+    timerReset();
+  });
+});
+timerEls.min.addEventListener('change', timerReset);
+timerEls.sec.addEventListener('change', timerReset);
+timerEls.start.addEventListener('click', timerStart);
+timerEls.pause.addEventListener('click', timerPause);
+timerEls.reset.addEventListener('click', timerReset);
+
+/* Init timer */
+timerReset();
 
 /* ============================================================
    HASH ROUTING
