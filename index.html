@@ -2908,6 +2908,128 @@ timerEls.reset.addEventListener('click', timerReset);
 timerReset();
 
 /* ============================================================
+   SOUND BOARD (Web Audio synthesis)
+============================================================ */
+let _audioCtx = null;
+function soundCtx() {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+function soundTone({ freq = 440, dur = 0.2, type = 'sine', gain = 0.3, attack = 0.01, release = 0.1, start = 0, sweep = null }) {
+  const ctx = soundCtx();
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  const t = ctx.currentTime + start;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + attack);
+  g.gain.linearRampToValueAtTime(0, t + dur + release);
+  if (sweep) osc.frequency.exponentialRampToValueAtTime(sweep, t + dur);
+  osc.connect(g).connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + dur + release + 0.05);
+}
+
+function soundNoise({ dur = 0.2, gain = 0.25, start = 0, filterFreq = 2000, filterType = 'bandpass', Q = 1 }) {
+  const ctx = soundCtx();
+  const bufSize = ctx.sampleRate * dur;
+  const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const filter = ctx.createBiquadFilter();
+  filter.type = filterType;
+  filter.frequency.value = filterFreq;
+  filter.Q.value = Q;
+  const g = ctx.createGain();
+  const t = ctx.currentTime + start;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(filter).connect(g).connect(ctx.destination);
+  src.start(t);
+  src.stop(t + dur + 0.05);
+}
+
+const SOUND_LIB = [
+  { key: 'applause', emoji: '👏', name: '掌聲', play: () => {
+    // filtered noise burst for applause
+    for (let i = 0; i < 40; i++) {
+      soundNoise({ dur: 0.05 + Math.random() * 0.06, gain: 0.15, start: i * 0.03 + Math.random() * 0.01, filterFreq: 4000 + Math.random() * 3000, Q: 0.7 });
+    }
+  } },
+  { key: 'drum', emoji: '🥁', name: '鼓點', play: () => {
+    // kick drum
+    soundTone({ freq: 150, sweep: 40, type: 'sine', dur: 0.15, gain: 0.5 });
+    soundNoise({ dur: 0.05, gain: 0.2, filterFreq: 200, filterType: 'lowpass', Q: 2 });
+  } },
+  { key: 'bell', emoji: '🔔', name: '叮叮', play: () => {
+    soundTone({ freq: 1760, type: 'sine', dur: 0.4, gain: 0.35, release: 0.8 });
+    soundTone({ freq: 2640, type: 'sine', dur: 0.4, gain: 0.15, release: 0.8, start: 0.005 });
+  } },
+  { key: 'correct', emoji: '✅', name: '答對', play: () => {
+    soundTone({ freq: 523, type: 'triangle', dur: 0.12, gain: 0.3, start: 0 });
+    soundTone({ freq: 784, type: 'triangle', dur: 0.25, gain: 0.3, start: 0.12 });
+  } },
+  { key: 'wrong', emoji: '❌', name: '答錯', play: () => {
+    soundTone({ freq: 240, sweep: 100, type: 'sawtooth', dur: 0.35, gain: 0.3 });
+  } },
+  { key: 'fanfare', emoji: '🎉', name: '勝利', play: () => {
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((f, i) => soundTone({ freq: f, type: 'square', dur: 0.12, gain: 0.25, start: i * 0.1 }));
+    soundTone({ freq: 1047, type: 'square', dur: 0.4, gain: 0.3, start: notes.length * 0.1 });
+  } },
+  { key: 'sad', emoji: '😢', name: '哭哭', play: () => {
+    [440, 415, 392, 370].forEach((f, i) => soundTone({ freq: f, type: 'triangle', dur: 0.2, gain: 0.25, start: i * 0.2 }));
+  } },
+  { key: 'buzz', emoji: '🚫', name: '蜂鳴', play: () => {
+    soundTone({ freq: 200, type: 'sawtooth', dur: 0.6, gain: 0.3 });
+  } },
+  { key: 'chime', emoji: '🎐', name: '風鈴', play: () => {
+    [1318, 1568, 2093, 2637].forEach((f, i) => soundTone({ freq: f, type: 'sine', dur: 0.5, gain: 0.18, release: 1.2, start: i * 0.08 }));
+  } },
+  { key: 'pop', emoji: '💥', name: 'Pop', play: () => {
+    soundTone({ freq: 600, sweep: 80, type: 'sine', dur: 0.08, gain: 0.4 });
+  } },
+  { key: 'laser', emoji: '🛸', name: '雷射', play: () => {
+    soundTone({ freq: 1200, sweep: 200, type: 'sawtooth', dur: 0.3, gain: 0.25 });
+  } },
+  { key: 'scream', emoji: '😱', name: '慘叫', play: () => {
+    const ctx = soundCtx();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 800;
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.3, t + 0.02);
+    osc.frequency.exponentialRampToValueAtTime(400, t + 0.5);
+    osc.frequency.exponentialRampToValueAtTime(1000, t + 0.8);
+    g.gain.linearRampToValueAtTime(0, t + 1);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 1.1);
+  } }
+];
+
+const soundGrid = document.getElementById('sound-grid');
+SOUND_LIB.forEach(s => {
+  const btn = document.createElement('button');
+  btn.className = 'sound-btn';
+  btn.innerHTML = `<span class="emoji">${s.emoji}</span><span class="name">${s.name}</span>`;
+  btn.addEventListener('click', () => {
+    try { s.play(); } catch (e) { console.error(e); }
+  });
+  soundGrid.appendChild(btn);
+});
+
+/* ============================================================
    HASH ROUTING
 ============================================================ */
 function applyHash() {
