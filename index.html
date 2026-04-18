@@ -3309,6 +3309,332 @@ voteEls.hostQr.addEventListener('click', () => {
 });
 
 /* ============================================================
+   UNDERCOVER (ROLE CARD DISTRIBUTION)
+============================================================ */
+const UC = {
+  PREFIX: 'pu-uc-',
+  peer: null,
+  role: null,    // 'host' | 'player'
+  conns: [],
+  roomName: '',
+  peerId: '',
+  mode: 'undercover',
+  // host-side: players = [{ connPeerId, name, assignedRole }]
+  players: [],
+  dealt: false
+};
+
+const ucEls = {
+  setup: document.getElementById('uc-setup'),
+  roomInput: document.getElementById('uc-room-input'),
+  hostBtn: document.getElementById('uc-host-btn'),
+  joinBtn: document.getElementById('uc-join-btn'),
+  statusRow: document.getElementById('uc-status-row'),
+
+  hostPanel: document.getElementById('uc-host-panel'),
+  hostRoomname: document.getElementById('uc-host-roomname'),
+  hostLeave: document.getElementById('uc-host-leave'),
+  hostConn: document.getElementById('uc-host-conn'),
+  hostShareUrl: document.getElementById('uc-host-share-url'),
+  hostCopy: document.getElementById('uc-host-copy'),
+  hostQr: document.getElementById('uc-host-qr'),
+  hostQrCanvas: document.getElementById('uc-host-qr-canvas'),
+  modeSeg: document.getElementById('uc-mode-seg'),
+  modeUndercover: document.getElementById('uc-mode-undercover'),
+  modeCustom: document.getElementById('uc-mode-custom'),
+  civWord: document.getElementById('uc-civ-word'),
+  spyWord: document.getElementById('uc-spy-word'),
+  spyCount: document.getElementById('uc-spy-count'),
+  roles: document.getElementById('uc-roles'),
+  players: document.getElementById('uc-players'),
+  hostDeal: document.getElementById('uc-host-deal'),
+  hostReveal: document.getElementById('uc-host-reveal'),
+  hostAnswer: document.getElementById('uc-host-answer'),
+
+  playerPanel: document.getElementById('uc-player-panel'),
+  playerRoomname: document.getElementById('uc-player-roomname'),
+  playerLeave: document.getElementById('uc-player-leave'),
+  playerConn: document.getElementById('uc-player-conn'),
+  playerNameWrap: document.getElementById('uc-player-name-wrap'),
+  playerName: document.getElementById('uc-player-name'),
+  playerSubmitName: document.getElementById('uc-player-submit-name'),
+  playerWaiting: document.getElementById('uc-player-waiting'),
+  playerCardWrap: document.getElementById('uc-player-card-wrap'),
+  playerCard: document.getElementById('uc-player-card'),
+  cardRole: document.getElementById('uc-card-role'),
+  cardWord: document.getElementById('uc-card-word'),
+  cardHint: document.getElementById('uc-card-hint')
+};
+
+function ucToPeerId(n) { return UC.PREFIX + hashRoomName(n); }
+
+function ucCreatePeer(pid) {
+  return new Promise((resolve, reject) => {
+    const p = new Peer(pid);
+    let opened = false;
+    p.on('open', () => { opened = true; resolve(p); });
+    p.on('error', err => { if (!opened) reject(err); });
+  });
+}
+
+function ucRenderPlayers() {
+  ucEls.players.innerHTML = '';
+  if (UC.players.length === 0) {
+    ucEls.players.innerHTML = '<span class="muted">（還沒人加入）</span>';
+    return;
+  }
+  UC.players.forEach(p => {
+    const chip = document.createElement('span');
+    chip.className = 'player-chip' + (p.assignedRole ? ' assigned' : '');
+    chip.textContent = p.name + (p.assignedRole ? ' ✓' : '');
+    ucEls.players.appendChild(chip);
+  });
+}
+
+function ucUpdateConnCount() {
+  const n = UC.conns.filter(c => c && c.open).length;
+  setStatus(ucEls.hostConn, n === 0 ? '⏳ 等玩家加入...' : `✅ 連線 ${n} 位`, n === 0 ? 'wait' : 'ok');
+}
+
+function ucBuildRoles() {
+  if (UC.mode === 'undercover') {
+    const civ = ucEls.civWord.value.trim();
+    const spy = ucEls.spyWord.value.trim();
+    const spyN = Math.max(1, parseInt(ucEls.spyCount.value, 10) || 1);
+    const total = UC.players.length;
+    if (!civ || !spy) { alert('平民詞和臥底詞都要填'); return null; }
+    if (spyN >= total) { alert('臥底人數要少於總人數'); return null; }
+    const roles = [];
+    for (let i = 0; i < spyN; i++) roles.push({ role: '臥底', word: spy, hint: '你拿到的詞跟大家不一樣，偽裝自己' });
+    for (let i = spyN; i < total; i++) roles.push({ role: '平民', word: civ, hint: '找出臥底' });
+    return roles;
+  } else {
+    const lines = ucEls.roles.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (lines.length < UC.players.length) {
+      alert(`角色數量 ${lines.length} 少於玩家人數 ${UC.players.length}`); return null;
+    }
+    // Shuffle and take first N
+    const shuffled = lines.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, UC.players.length).map(r => ({ role: r, word: '', hint: '' }));
+  }
+}
+
+function ucDeal() {
+  if (UC.players.length < 2) { alert('至少要 2 位玩家加入'); return; }
+  const roles = ucBuildRoles();
+  if (!roles) return;
+
+  // Shuffle player assignment
+  const idx = UC.players.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  idx.forEach((pi, ri) => {
+    UC.players[pi].assignedRole = roles[ri];
+    // send to that player
+    const conn = UC.conns.find(c => c && c.peer === UC.players[pi].connPeerId);
+    if (conn && conn.open) {
+      try { conn.send({ type: 'role', data: roles[ri] }); } catch (e) {}
+    }
+  });
+  UC.dealt = true;
+  ucRenderPlayers();
+  ucEls.hostAnswer.innerHTML = '';
+}
+
+function ucRevealAllToHost() {
+  if (!UC.dealt) { alert('還沒分發角色'); return; }
+  const html = UC.players.map(p => {
+    if (!p.assignedRole) return `<div>${escapeHtml(p.name)}：（未分到）</div>`;
+    const r = p.assignedRole;
+    const label = r.word ? `${r.role}（${r.word}）` : r.role;
+    return `<div>👉 ${escapeHtml(p.name)}：<b>${escapeHtml(label)}</b></div>`;
+  }).join('');
+  ucEls.hostAnswer.innerHTML = '<div class="muted" style="font-size:12px;margin-bottom:4px">🔐 只有你看得到（不要給玩家看！）</div>' + html;
+}
+
+async function ucHost(name) {
+  try {
+    UC.role = 'host';
+    UC.roomName = name;
+    UC.peerId = ucToPeerId(name);
+    setStatus(ucEls.statusRow, '⏳ 開房中...', 'wait');
+    UC.peer = await ucCreatePeer(UC.peerId);
+
+    ucEls.setup.classList.add('hidden');
+    ucEls.hostPanel.classList.remove('hidden');
+    ucEls.hostRoomname.textContent = name;
+    ucEls.hostShareUrl.textContent = location.origin + location.pathname + '#uc=' + encodeURIComponent(name);
+    ucRenderPlayers();
+    ucUpdateConnCount();
+
+    UC.peer.on('connection', conn => {
+      UC.conns.push(conn);
+      conn.on('open', () => ucUpdateConnCount());
+      conn.on('data', data => {
+        if (!data) return;
+        if (data.type === 'join') {
+          // player sets their name
+          let p = UC.players.find(x => x.connPeerId === conn.peer);
+          if (!p) {
+            p = { connPeerId: conn.peer, name: data.name || '無名氏', assignedRole: null };
+            UC.players.push(p);
+          } else {
+            p.name = data.name || p.name;
+          }
+          ucRenderPlayers();
+          try { conn.send({ type: 'joined' }); } catch (e) {}
+        }
+      });
+      conn.on('close', () => {
+        UC.conns = UC.conns.filter(c => c !== conn);
+        UC.players = UC.players.filter(p => p.connPeerId !== conn.peer);
+        ucUpdateConnCount();
+        ucRenderPlayers();
+      });
+      conn.on('error', () => {
+        UC.conns = UC.conns.filter(c => c !== conn);
+        ucUpdateConnCount();
+      });
+    });
+  } catch (err) {
+    if (err && err.type === 'unavailable-id') {
+      setStatus(ucEls.statusRow, '⚠️ 房號有人在用，換一個', 'err');
+    } else {
+      setStatus(ucEls.statusRow, '⚠️ 開房失敗：' + (err.type || err.message || err), 'err');
+    }
+    UC.peer = null;
+    UC.role = null;
+  }
+}
+
+async function ucJoin(name) {
+  try {
+    UC.role = 'player';
+    UC.roomName = name;
+    UC.peerId = ucToPeerId(name);
+    setStatus(ucEls.statusRow, '⏳ 連線中...', 'wait');
+    UC.peer = await ucCreatePeer(UC.PREFIX + 'p-' + randomCode(6));
+
+    ucEls.setup.classList.add('hidden');
+    ucEls.playerPanel.classList.remove('hidden');
+    ucEls.playerRoomname.textContent = name;
+    ucEls.playerNameWrap.classList.remove('hidden');
+    ucEls.playerWaiting.classList.add('hidden');
+    ucEls.playerCardWrap.classList.add('hidden');
+    setStatus(ucEls.playerConn, '⏳ 連線主持人中...', 'wait');
+
+    const conn = UC.peer.connect(UC.peerId, { reliable: true });
+    UC.conns = [conn];
+
+    conn.on('open', () => setStatus(ucEls.playerConn, '✅ 已連線，請輸入你的暱稱', 'ok'));
+    conn.on('data', data => {
+      if (!data) return;
+      if (data.type === 'joined') {
+        ucEls.playerNameWrap.classList.add('hidden');
+        ucEls.playerWaiting.classList.remove('hidden');
+        setStatus(ucEls.playerConn, '✅ 已加入，等主持人分發角色', 'ok');
+      } else if (data.type === 'role') {
+        ucEls.playerWaiting.classList.add('hidden');
+        ucEls.playerCardWrap.classList.remove('hidden');
+        const r = data.data;
+        ucEls.cardRole.textContent = r.role;
+        ucEls.cardWord.textContent = r.word || '';
+        ucEls.cardHint.textContent = r.hint || '';
+        ucEls.playerCard.classList.add('hidden-card');
+        ucEls.playerCard.classList.remove('revealed');
+      }
+    });
+    conn.on('close', () => setStatus(ucEls.playerConn, '⚠️ 主持人離線', 'err'));
+    conn.on('error', err => setStatus(ucEls.playerConn, '⚠️ ' + err.type, 'err'));
+  } catch (err) {
+    setStatus(ucEls.statusRow, '⚠️ 加入失敗：' + (err.type || err.message || err), 'err');
+    UC.peer = null;
+    UC.role = null;
+  }
+}
+
+function ucLeave() {
+  try { UC.conns.forEach(c => c && c.close()); } catch (e) {}
+  try { if (UC.peer) UC.peer.destroy(); } catch (e) {}
+  UC.peer = null;
+  UC.role = null;
+  UC.conns = [];
+  UC.players = [];
+  UC.dealt = false;
+  ucEls.setup.classList.remove('hidden');
+  ucEls.hostPanel.classList.add('hidden');
+  ucEls.playerPanel.classList.add('hidden');
+  ucEls.statusRow.innerHTML = '';
+  ucEls.hostAnswer.innerHTML = '';
+  ucEls.hostQrCanvas.classList.add('hidden');
+  if (location.hash.startsWith('#uc=')) history.replaceState(null, '', '#undercover');
+}
+
+/* Undercover event bindings */
+ucEls.hostBtn.addEventListener('click', () => {
+  const n = ucEls.roomInput.value.trim();
+  if (!n) { setStatus(ucEls.statusRow, '⚠️ 請輸入房號', 'err'); return; }
+  ucHost(n);
+});
+ucEls.joinBtn.addEventListener('click', () => {
+  const n = ucEls.roomInput.value.trim();
+  if (!n) { setStatus(ucEls.statusRow, '⚠️ 請輸入主持人給你的房號', 'err'); return; }
+  ucJoin(n);
+});
+ucEls.hostLeave.addEventListener('click', ucLeave);
+ucEls.playerLeave.addEventListener('click', ucLeave);
+
+ucEls.modeSeg.querySelectorAll('button').forEach(b => {
+  b.addEventListener('click', () => {
+    ucEls.modeSeg.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    UC.mode = b.dataset.mode;
+    ucEls.modeUndercover.classList.toggle('hidden', UC.mode !== 'undercover');
+    ucEls.modeCustom.classList.toggle('hidden', UC.mode !== 'custom');
+  });
+});
+
+ucEls.hostDeal.addEventListener('click', ucDeal);
+ucEls.hostReveal.addEventListener('click', ucRevealAllToHost);
+
+ucEls.hostCopy.addEventListener('click', async () => {
+  if (await copyToClipboard(ucEls.hostShareUrl.textContent)) {
+    ucEls.hostCopy.textContent = '✅ 已複製';
+    setTimeout(() => ucEls.hostCopy.textContent = '📋 複製', 1500);
+  }
+});
+ucEls.hostQr.addEventListener('click', () => {
+  if (ucEls.hostQrCanvas.classList.contains('hidden')) {
+    QRCode.toCanvas(ucEls.hostQrCanvas, ucEls.hostShareUrl.textContent, { width: 180, margin: 1 }, err => {
+      if (!err) ucEls.hostQrCanvas.classList.remove('hidden');
+    });
+  } else {
+    ucEls.hostQrCanvas.classList.add('hidden');
+  }
+});
+
+ucEls.playerSubmitName.addEventListener('click', () => {
+  const name = ucEls.playerName.value.trim() || '無名氏';
+  const conn = UC.conns[0];
+  if (!conn || !conn.open) { alert('還沒連上主持人'); return; }
+  try { conn.send({ type: 'join', name }); } catch (e) {}
+});
+
+// Click to reveal role card (tap to show)
+ucEls.playerCard.addEventListener('click', () => {
+  if (ucEls.playerCard.classList.contains('hidden-card')) {
+    ucEls.playerCard.classList.remove('hidden-card');
+    ucEls.playerCard.classList.add('revealed');
+  }
+});
+
+/* ============================================================
    HASH ROUTING
 ============================================================ */
 function applyHash() {
