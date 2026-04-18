@@ -3017,6 +3017,104 @@ function soundNoise({ dur = 0.2, gain = 0.25, start = 0, filterFreq = 2000, filt
   src.stop(t + dur + 0.05);
 }
 
+/* Music helpers */
+const NOTE_FREQ = (() => {
+  const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const out = {};
+  for (let oct = 2; oct <= 6; oct++) {
+    names.forEach((n, i) => {
+      const midi = (oct + 1) * 12 + i;
+      out[n + oct] = 440 * Math.pow(2, (midi - 69) / 12);
+    });
+  }
+  return out;
+})();
+
+// Soft mellow tone: triangle base + faint sine octave + ADSR envelope
+function softNote(freq, t, dur, gain = 0.18) {
+  const ctx = soundCtx();
+  const oscs = [];
+  const o1 = ctx.createOscillator();
+  const o2 = ctx.createOscillator();
+  o1.type = 'triangle';
+  o2.type = 'sine';
+  o1.frequency.value = freq;
+  o2.frequency.value = freq * 2;
+  const g = ctx.createGain();
+  const g2 = ctx.createGain();
+  g2.gain.value = 0.18;
+  const a = 0.012, d = 0.1, s = 0.55, r = 0.18;
+  const safeS = Math.max(0.001, gain * s);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + a);
+  g.gain.exponentialRampToValueAtTime(safeS, t + a + d);
+  g.gain.setValueAtTime(safeS, Math.max(t + a + d, t + dur - r));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.02);
+  o1.connect(g).connect(ctx.destination);
+  o2.connect(g2).connect(g);
+  o1.start(t); o2.start(t);
+  o1.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
+  oscs.push(o1, o2);
+  return oscs;
+}
+
+// Brassy trumpet-like tone for fanfare
+function brassNote(freq, t, dur, gain = 0.16) {
+  const ctx = soundCtx();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  o.type = 'sawtooth';
+  o.frequency.value = freq;
+  filter.type = 'lowpass';
+  filter.Q.value = 1.4;
+  // brass-like filter sweep
+  filter.frequency.setValueAtTime(freq * 2, t);
+  filter.frequency.exponentialRampToValueAtTime(freq * 5, t + 0.05);
+  filter.frequency.exponentialRampToValueAtTime(freq * 3, t + dur);
+  const a = 0.02, d = 0.05, s = 0.7, r = 0.12;
+  const safeS = Math.max(0.001, gain * s);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + a);
+  g.gain.exponentialRampToValueAtTime(safeS, t + a + d);
+  g.gain.setValueAtTime(safeS, Math.max(t + a + d, t + dur - r));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.02);
+  o.connect(filter).connect(g).connect(ctx.destination);
+  o.start(t);
+  o.stop(t + dur + 0.1);
+  return [o];
+}
+
+// Play a melody: notes = [[noteName, beats], ...]; tempo in BPM
+function startSong(notes, tempo, noteFn = softNote, gain = 0.2) {
+  let active = true;
+  let timeoutId = null;
+  let activeOscs = [];
+
+  function playOnce() {
+    if (!active) return;
+    const ctx = soundCtx();
+    const beat = 60 / tempo;
+    let t = ctx.currentTime + 0.04;
+    activeOscs = [];
+    for (const [n, d] of notes) {
+      const freq = NOTE_FREQ[n];
+      const len = d * beat;
+      if (freq) activeOscs.push(...noteFn(freq, t, len * 0.92, gain));
+      t += len;
+    }
+    const totalMs = (t - ctx.currentTime) * 1000 + 600;  // small gap before loop
+    timeoutId = setTimeout(playOnce, totalMs);
+  }
+  playOnce();
+
+  return () => {
+    active = false;
+    if (timeoutId) clearTimeout(timeoutId);
+    activeOscs.forEach(o => { try { o.stop(); } catch (e) {} });
+  };
+}
+
 const SOUND_LIB = [
   { key: 'applause', emoji: '👏', name: '掌聲', interval: 350, once: () => {
     for (let i = 0; i < 25; i++) {
@@ -3038,16 +3136,15 @@ const SOUND_LIB = [
   { key: 'wrong', emoji: '❌', name: '答錯', interval: 1500, once: () => {
     soundTone({ freq: 240, sweep: 100, type: 'sawtooth', dur: 0.35, gain: 0.3 });
   } },
-  { key: 'fanfare', emoji: '🎉', name: '勝利', interval: 2400, once: () => {
-    const notes = [523, 659, 784, 1047];
-    notes.forEach((f, i) => soundTone({ freq: f, type: 'square', dur: 0.12, gain: 0.25, start: i * 0.1 }));
-    soundTone({ freq: 1047, type: 'square', dur: 0.4, gain: 0.3, start: notes.length * 0.1 });
+  { key: 'fanfare', emoji: '🎉', name: '勝利', song: {
+    notes: [['C5',0.5],['E5',0.5],['G5',0.5],['C6',1.5]],
+    tempo: 110, noteFn: 'brass', gain: 0.18
   } },
   { key: 'sad', emoji: '😢', name: '哭哭', interval: 2200, once: () => {
     [440, 415, 392, 370].forEach((f, i) => soundTone({ freq: f, type: 'triangle', dur: 0.2, gain: 0.25, start: i * 0.2 }));
   } },
   { key: 'buzz', emoji: '🚫', name: '蜂鳴', drone: { freq: 200, type: 'sawtooth', gain: 0.25 } },
-  { key: 'siren', emoji: '🚨', name: '警報', drone: { freq: 600, type: 'square', gain: 0.2, modFreq: 4, modAmount: 250 } },
+  { key: 'siren', emoji: '🚨', name: '警報', drone: { freq: 600, type: 'sine', gain: 0.18, modFreq: 3, modAmount: 220 } },
   { key: 'chime', emoji: '🎐', name: '風鈴', interval: 900, once: () => {
     const pool = [1318, 1568, 2093, 2637, 1760, 2349];
     const pick = pool[Math.floor(Math.random() * pool.length)];
@@ -3058,7 +3155,8 @@ const SOUND_LIB = [
     soundTone({ freq: 500 + Math.random() * 400, sweep: 80, type: 'sine', dur: 0.08, gain: 0.4 });
   } },
   { key: 'laser', emoji: '🛸', name: '雷射', interval: 700, once: () => {
-    soundTone({ freq: 1200, sweep: 200, type: 'sawtooth', dur: 0.3, gain: 0.25 });
+    soundTone({ freq: 1400, sweep: 240, type: 'sine', dur: 0.25, gain: 0.22 });
+    soundTone({ freq: 700, sweep: 120, type: 'triangle', dur: 0.25, gain: 0.12, start: 0.005 });
   } },
   { key: 'scream', emoji: '😱', name: '慘叫', interval: 2200, once: () => {
     const ctx = soundCtx();
@@ -3080,7 +3178,27 @@ const SOUND_LIB = [
     soundTone({ freq: 70, sweep: 40, type: 'sine', dur: 0.1, gain: 0.45 });
     soundTone({ freq: 60, sweep: 35, type: 'sine', dur: 0.08, gain: 0.35, start: 0.18 });
   } },
-  { key: 'ufo', emoji: '👽', name: 'UFO', drone: { freq: 440, type: 'sine', gain: 0.2, modFreq: 6, modAmount: 80 } }
+  { key: 'ufo', emoji: '👽', name: 'UFO', drone: { freq: 440, type: 'sine', gain: 0.2, modFreq: 6, modAmount: 80 } },
+
+  // 完整歌曲（自動循環）
+  { key: 'birthday', emoji: '🎂', name: '生日快樂', song: {
+    notes: [
+      ['G4',0.75],['G4',0.25],['A4',1],['G4',1],['C5',1],['B4',2],
+      ['G4',0.75],['G4',0.25],['A4',1],['G4',1],['D5',1],['C5',2],
+      ['G4',0.75],['G4',0.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',1.5],
+      ['F5',0.75],['F5',0.25],['E5',1],['C5',1],['D5',1],['C5',2.5]
+    ],
+    tempo: 120, noteFn: 'soft', gain: 0.2
+  } },
+  { key: 'awards', emoji: '🏆', name: '頒獎曲', song: {
+    // Trumpet-style awards fanfare
+    notes: [
+      ['G4',0.5],['G4',0.5],['G4',0.5],['C5',1.5],
+      ['E5',0.5],['E5',0.5],['E5',0.5],['G5',1.5],
+      ['C5',0.5],['E5',0.5],['G5',0.5],['C6',2]
+    ],
+    tempo: 130, noteFn: 'brass', gain: 0.18
+  } }
 ];
 
 function startDrone({ freq, type = 'sine', gain = 0.3, modFreq = null, modAmount = 0 }) {
@@ -3147,8 +3265,14 @@ SOUND_LIB.forEach(s => {
       stopAllSounds();
       if (wasThisPlaying) return;  // toggling the active one off
       let stopFn;
-      if (s.drone) stopFn = startDrone(s.drone);
-      else stopFn = startLoop(s.once, s.interval);
+      if (s.drone) {
+        stopFn = startDrone(s.drone);
+      } else if (s.song) {
+        const fn = s.song.noteFn === 'brass' ? brassNote : softNote;
+        stopFn = startSong(s.song.notes, s.song.tempo, fn, s.song.gain);
+      } else {
+        stopFn = startLoop(s.once, s.interval);
+      }
       playingSounds[s.key] = stopFn;
       activeSoundBtn = btn;
       btn.classList.add('playing');
