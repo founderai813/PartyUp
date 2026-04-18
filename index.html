@@ -3030,6 +3030,285 @@ SOUND_LIB.forEach(s => {
 });
 
 /* ============================================================
+   VOTE (LIVE POLL)
+============================================================ */
+const VOTE = {
+  PREFIX: 'pu-vote-',
+  peer: null,
+  role: null,
+  conns: [],
+  roomName: '',
+  peerId: '',
+  // host-side state
+  question: '',
+  options: [],          // array of strings
+  votes: {},            // connId -> option index
+  open: false,
+  // viewer-side state
+  myVote: null
+};
+
+const voteEls = {
+  setup: document.getElementById('vote-setup'),
+  roomInput: document.getElementById('vote-room-input'),
+  hostBtn: document.getElementById('vote-host-btn'),
+  joinBtn: document.getElementById('vote-join-btn'),
+  statusRow: document.getElementById('vote-status-row'),
+
+  hostPanel: document.getElementById('vote-host-panel'),
+  hostRoomname: document.getElementById('vote-host-roomname'),
+  hostLeave: document.getElementById('vote-host-leave'),
+  hostConn: document.getElementById('vote-host-conn'),
+  hostShareUrl: document.getElementById('vote-host-share-url'),
+  hostCopy: document.getElementById('vote-host-copy'),
+  hostQr: document.getElementById('vote-host-qr'),
+  hostQrCanvas: document.getElementById('vote-host-qr-canvas'),
+  question: document.getElementById('vote-question'),
+  options: document.getElementById('vote-options'),
+  hostStart: document.getElementById('vote-host-start'),
+  hostClose: document.getElementById('vote-host-close'),
+  hostResults: document.getElementById('vote-host-results'),
+
+  viewerPanel: document.getElementById('vote-viewer-panel'),
+  viewerRoomname: document.getElementById('vote-viewer-roomname'),
+  viewerLeave: document.getElementById('vote-viewer-leave'),
+  viewerConn: document.getElementById('vote-viewer-conn'),
+  viewerQuestion: document.getElementById('vote-viewer-question'),
+  viewerOptions: document.getElementById('vote-viewer-options'),
+  viewerResults: document.getElementById('vote-viewer-results')
+};
+
+function voteToPeerId(name) { return VOTE.PREFIX + hashRoomName(name); }
+
+function voteCreatePeer(pid) {
+  return new Promise((resolve, reject) => {
+    const p = new Peer(pid);
+    let opened = false;
+    p.on('open', () => { opened = true; resolve(p); });
+    p.on('error', err => { if (!opened) reject(err); });
+  });
+}
+
+function voteCountVotes() {
+  const counts = VOTE.options.map(() => 0);
+  Object.values(VOTE.votes).forEach(idx => { if (counts[idx] !== undefined) counts[idx]++; });
+  return counts;
+}
+
+function voteRenderBars(container, counts, options, myVoteIdx = null) {
+  container.innerHTML = '';
+  const total = counts.reduce((s, c) => s + c, 0);
+  options.forEach((opt, i) => {
+    const pct = total > 0 ? (counts[i] / total) * 100 : 0;
+    const row = document.createElement('div');
+    row.className = 'vote-bar-row';
+    row.innerHTML = `
+      <span class="vote-bar-label">${escapeHtml(opt)}${myVoteIdx === i ? ' ✓' : ''}</span>
+      <div class="vote-bar-track">
+        <div class="vote-bar-fill" style="width:${pct}%"></div>
+        <div class="vote-bar-count">${counts[i]} (${Math.round(pct)}%)</div>
+      </div>`;
+    container.appendChild(row);
+  });
+  const totalEl = document.createElement('div');
+  totalEl.className = 'muted';
+  totalEl.style.marginTop = '6px';
+  totalEl.textContent = `共 ${total} 票`;
+  container.appendChild(totalEl);
+}
+
+function voteHostUpdateViewerCount() {
+  const n = VOTE.conns.filter(c => c && c.open).length;
+  setStatus(voteEls.hostConn, n === 0 ? '⏳ 等觀眾加入...' : `✅ ${n} 位觀眾在線`, n === 0 ? 'wait' : 'ok');
+}
+
+function voteHostBroadcastState() {
+  const counts = voteCountVotes();
+  const payload = {
+    type: 'state',
+    question: VOTE.question,
+    options: VOTE.options,
+    counts,
+    open: VOTE.open
+  };
+  VOTE.conns.forEach(c => { try { if (c.open) c.send(payload); } catch (e) {} });
+  voteRenderBars(voteEls.hostResults, counts, VOTE.options);
+}
+
+async function voteHost(name) {
+  try {
+    VOTE.role = 'host';
+    VOTE.roomName = name;
+    VOTE.peerId = voteToPeerId(name);
+    setStatus(voteEls.statusRow, '⏳ 開房中...', 'wait');
+    VOTE.peer = await voteCreatePeer(VOTE.peerId);
+
+    voteEls.setup.classList.add('hidden');
+    voteEls.hostPanel.classList.remove('hidden');
+    voteEls.hostRoomname.textContent = name;
+    voteEls.hostShareUrl.textContent = location.origin + location.pathname + '#vote=' + encodeURIComponent(name);
+    voteHostUpdateViewerCount();
+
+    VOTE.peer.on('connection', conn => {
+      VOTE.conns.push(conn);
+      conn.on('open', () => {
+        voteHostUpdateViewerCount();
+        // Send current state to newcomer
+        try {
+          conn.send({
+            type: 'state',
+            question: VOTE.question,
+            options: VOTE.options,
+            counts: voteCountVotes(),
+            open: VOTE.open
+          });
+        } catch (e) {}
+      });
+      conn.on('data', data => {
+        if (!data || data.type !== 'vote') return;
+        if (!VOTE.open) return;
+        const idx = parseInt(data.index, 10);
+        if (idx < 0 || idx >= VOTE.options.length) return;
+        VOTE.votes[conn.peer] = idx;
+        voteHostBroadcastState();
+      });
+      conn.on('close', () => {
+        VOTE.conns = VOTE.conns.filter(c => c !== conn);
+        voteHostUpdateViewerCount();
+      });
+      conn.on('error', () => {
+        VOTE.conns = VOTE.conns.filter(c => c !== conn);
+        voteHostUpdateViewerCount();
+      });
+    });
+  } catch (err) {
+    if (err && err.type === 'unavailable-id') {
+      setStatus(voteEls.statusRow, '⚠️ 房號有人在用，換一個', 'err');
+    } else {
+      setStatus(voteEls.statusRow, '⚠️ 開房失敗：' + (err.type || err.message || err), 'err');
+    }
+    VOTE.peer = null;
+    VOTE.role = null;
+  }
+}
+
+async function voteJoin(name) {
+  try {
+    VOTE.role = 'viewer';
+    VOTE.roomName = name;
+    VOTE.peerId = voteToPeerId(name);
+    setStatus(voteEls.statusRow, '⏳ 連線中...', 'wait');
+    VOTE.peer = await voteCreatePeer(VOTE.PREFIX + 'v-' + randomCode(6));
+
+    voteEls.setup.classList.add('hidden');
+    voteEls.viewerPanel.classList.remove('hidden');
+    voteEls.viewerRoomname.textContent = name;
+    setStatus(voteEls.viewerConn, '⏳ 連線主持人中...', 'wait');
+
+    const conn = VOTE.peer.connect(VOTE.peerId, { reliable: true });
+    VOTE.conns = [conn];
+
+    conn.on('open', () => setStatus(voteEls.viewerConn, '✅ 已連線', 'ok'));
+    conn.on('data', data => {
+      if (!data || data.type !== 'state') return;
+      voteEls.viewerQuestion.textContent = data.question || '（等主持人出題...）';
+      voteEls.viewerOptions.innerHTML = '';
+      if (data.open && data.options && data.options.length > 0) {
+        data.options.forEach((opt, i) => {
+          const b = document.createElement('button');
+          b.className = 'vote-option-btn' + (VOTE.myVote === i ? ' voted' : '');
+          b.textContent = opt;
+          b.addEventListener('click', () => {
+            if (!data.open) return;
+            VOTE.myVote = i;
+            try { conn.send({ type: 'vote', index: i }); } catch (e) {}
+            voteEls.viewerOptions.querySelectorAll('.vote-option-btn').forEach((x, j) => x.classList.toggle('voted', j === i));
+          });
+          voteEls.viewerOptions.appendChild(b);
+        });
+      }
+      voteRenderBars(voteEls.viewerResults, data.counts || [], data.options || [], VOTE.myVote);
+    });
+    conn.on('close', () => setStatus(voteEls.viewerConn, '⚠️ 主持人離線', 'err'));
+    conn.on('error', err => setStatus(voteEls.viewerConn, '⚠️ ' + err.type, 'err'));
+  } catch (err) {
+    setStatus(voteEls.statusRow, '⚠️ 加入失敗：' + (err.type || err.message || err), 'err');
+    VOTE.peer = null;
+    VOTE.role = null;
+  }
+}
+
+function voteLeave() {
+  try { VOTE.conns.forEach(c => c && c.close()); } catch (e) {}
+  try { if (VOTE.peer) VOTE.peer.destroy(); } catch (e) {}
+  VOTE.peer = null;
+  VOTE.role = null;
+  VOTE.conns = [];
+  VOTE.votes = {};
+  VOTE.options = [];
+  VOTE.question = '';
+  VOTE.open = false;
+  VOTE.myVote = null;
+  voteEls.setup.classList.remove('hidden');
+  voteEls.hostPanel.classList.add('hidden');
+  voteEls.viewerPanel.classList.add('hidden');
+  voteEls.statusRow.innerHTML = '';
+  voteEls.hostResults.innerHTML = '';
+  voteEls.viewerResults.innerHTML = '';
+  voteEls.viewerQuestion.textContent = '';
+  voteEls.viewerOptions.innerHTML = '';
+  voteEls.hostQrCanvas.classList.add('hidden');
+  if (location.hash.startsWith('#vote=')) history.replaceState(null, '', '#vote');
+}
+
+/* Vote event bindings */
+voteEls.hostBtn.addEventListener('click', () => {
+  const n = voteEls.roomInput.value.trim();
+  if (!n) { setStatus(voteEls.statusRow, '⚠️ 請輸入房號', 'err'); return; }
+  voteHost(n);
+});
+voteEls.joinBtn.addEventListener('click', () => {
+  const n = voteEls.roomInput.value.trim();
+  if (!n) { setStatus(voteEls.statusRow, '⚠️ 請輸入主持人給你的房號', 'err'); return; }
+  voteJoin(n);
+});
+voteEls.hostLeave.addEventListener('click', voteLeave);
+voteEls.viewerLeave.addEventListener('click', voteLeave);
+
+voteEls.hostStart.addEventListener('click', () => {
+  const q = voteEls.question.value.trim();
+  const opts = voteEls.options.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if (!q) { alert('請輸入題目'); return; }
+  if (opts.length < 2) { alert('至少要 2 個選項'); return; }
+  VOTE.question = q;
+  VOTE.options = opts;
+  VOTE.votes = {};
+  VOTE.open = true;
+  voteHostBroadcastState();
+});
+voteEls.hostClose.addEventListener('click', () => {
+  if (!VOTE.open) return;
+  VOTE.open = false;
+  voteHostBroadcastState();
+});
+
+voteEls.hostCopy.addEventListener('click', async () => {
+  if (await copyToClipboard(voteEls.hostShareUrl.textContent)) {
+    voteEls.hostCopy.textContent = '✅ 已複製';
+    setTimeout(() => voteEls.hostCopy.textContent = '📋 複製', 1500);
+  }
+});
+voteEls.hostQr.addEventListener('click', () => {
+  if (voteEls.hostQrCanvas.classList.contains('hidden')) {
+    QRCode.toCanvas(voteEls.hostQrCanvas, voteEls.hostShareUrl.textContent, { width: 180, margin: 1 }, err => {
+      if (!err) voteEls.hostQrCanvas.classList.remove('hidden');
+    });
+  } else {
+    voteEls.hostQrCanvas.classList.add('hidden');
+  }
+});
+
+/* ============================================================
    HASH ROUTING
 ============================================================ */
 function applyHash() {
