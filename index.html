@@ -582,6 +582,17 @@ textarea { min-height: 100px; resize: vertical; }
 .sound-btn:active { transform: scale(0.95); }
 .sound-btn .emoji { font-size: 36px; line-height: 1; }
 .sound-btn .name { font-size: 12px; color: var(--muted); }
+.sound-btn.playing {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
+  animation: soundPulse 1.2s ease-in-out infinite;
+}
+.sound-btn.playing .name { color: rgba(0, 0, 0, 0.7); font-weight: bold; }
+@keyframes soundPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 210, 255, 0.5); }
+  50% { box-shadow: 0 0 28px rgba(123, 47, 247, 0.7); }
+}
 
 /* Undercover card */
 .role-card {
@@ -2981,49 +2992,49 @@ function soundNoise({ dur = 0.2, gain = 0.25, start = 0, filterFreq = 2000, filt
 }
 
 const SOUND_LIB = [
-  { key: 'applause', emoji: '👏', name: '掌聲', play: () => {
-    // filtered noise burst for applause
-    for (let i = 0; i < 40; i++) {
-      soundNoise({ dur: 0.05 + Math.random() * 0.06, gain: 0.15, start: i * 0.03 + Math.random() * 0.01, filterFreq: 4000 + Math.random() * 3000, Q: 0.7 });
+  { key: 'applause', emoji: '👏', name: '掌聲', interval: 350, once: () => {
+    for (let i = 0; i < 25; i++) {
+      soundNoise({ dur: 0.04 + Math.random() * 0.05, gain: 0.15, start: Math.random() * 0.25, filterFreq: 4000 + Math.random() * 3000, Q: 0.7 });
     }
   } },
-  { key: 'drum', emoji: '🥁', name: '鼓點', play: () => {
-    // kick drum
+  { key: 'drum', emoji: '🥁', name: '鼓點', interval: 500, once: () => {
     soundTone({ freq: 150, sweep: 40, type: 'sine', dur: 0.15, gain: 0.5 });
     soundNoise({ dur: 0.05, gain: 0.2, filterFreq: 200, filterType: 'lowpass', Q: 2 });
   } },
-  { key: 'bell', emoji: '🔔', name: '叮叮', play: () => {
+  { key: 'bell', emoji: '🔔', name: '叮叮', interval: 1400, once: () => {
     soundTone({ freq: 1760, type: 'sine', dur: 0.4, gain: 0.35, release: 0.8 });
     soundTone({ freq: 2640, type: 'sine', dur: 0.4, gain: 0.15, release: 0.8, start: 0.005 });
   } },
-  { key: 'correct', emoji: '✅', name: '答對', play: () => {
+  { key: 'correct', emoji: '✅', name: '答對', interval: 1800, once: () => {
     soundTone({ freq: 523, type: 'triangle', dur: 0.12, gain: 0.3, start: 0 });
     soundTone({ freq: 784, type: 'triangle', dur: 0.25, gain: 0.3, start: 0.12 });
   } },
-  { key: 'wrong', emoji: '❌', name: '答錯', play: () => {
+  { key: 'wrong', emoji: '❌', name: '答錯', interval: 1500, once: () => {
     soundTone({ freq: 240, sweep: 100, type: 'sawtooth', dur: 0.35, gain: 0.3 });
   } },
-  { key: 'fanfare', emoji: '🎉', name: '勝利', play: () => {
+  { key: 'fanfare', emoji: '🎉', name: '勝利', interval: 2400, once: () => {
     const notes = [523, 659, 784, 1047];
     notes.forEach((f, i) => soundTone({ freq: f, type: 'square', dur: 0.12, gain: 0.25, start: i * 0.1 }));
     soundTone({ freq: 1047, type: 'square', dur: 0.4, gain: 0.3, start: notes.length * 0.1 });
   } },
-  { key: 'sad', emoji: '😢', name: '哭哭', play: () => {
+  { key: 'sad', emoji: '😢', name: '哭哭', interval: 2200, once: () => {
     [440, 415, 392, 370].forEach((f, i) => soundTone({ freq: f, type: 'triangle', dur: 0.2, gain: 0.25, start: i * 0.2 }));
   } },
-  { key: 'buzz', emoji: '🚫', name: '蜂鳴', play: () => {
-    soundTone({ freq: 200, type: 'sawtooth', dur: 0.6, gain: 0.3 });
+  { key: 'buzz', emoji: '🚫', name: '蜂鳴', drone: { freq: 200, type: 'sawtooth', gain: 0.25 } },
+  { key: 'siren', emoji: '🚨', name: '警報', drone: { freq: 600, type: 'square', gain: 0.2, modFreq: 4, modAmount: 250 } },
+  { key: 'chime', emoji: '🎐', name: '風鈴', interval: 900, once: () => {
+    const pool = [1318, 1568, 2093, 2637, 1760, 2349];
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    soundTone({ freq: pick, type: 'sine', dur: 0.5, gain: 0.2, release: 1.3 });
+    soundTone({ freq: pick * 1.5, type: 'sine', dur: 0.5, gain: 0.1, release: 1.3, start: 0.02 });
   } },
-  { key: 'chime', emoji: '🎐', name: '風鈴', play: () => {
-    [1318, 1568, 2093, 2637].forEach((f, i) => soundTone({ freq: f, type: 'sine', dur: 0.5, gain: 0.18, release: 1.2, start: i * 0.08 }));
+  { key: 'pop', emoji: '💥', name: 'Pop', interval: 450, once: () => {
+    soundTone({ freq: 500 + Math.random() * 400, sweep: 80, type: 'sine', dur: 0.08, gain: 0.4 });
   } },
-  { key: 'pop', emoji: '💥', name: 'Pop', play: () => {
-    soundTone({ freq: 600, sweep: 80, type: 'sine', dur: 0.08, gain: 0.4 });
-  } },
-  { key: 'laser', emoji: '🛸', name: '雷射', play: () => {
+  { key: 'laser', emoji: '🛸', name: '雷射', interval: 700, once: () => {
     soundTone({ freq: 1200, sweep: 200, type: 'sawtooth', dur: 0.3, gain: 0.25 });
   } },
-  { key: 'scream', emoji: '😱', name: '慘叫', play: () => {
+  { key: 'scream', emoji: '😱', name: '慘叫', interval: 2200, once: () => {
     const ctx = soundCtx();
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -3038,8 +3049,53 @@ const SOUND_LIB = [
     osc.connect(g).connect(ctx.destination);
     osc.start(t);
     osc.stop(t + 1.1);
-  } }
+  } },
+  { key: 'heartbeat', emoji: '💓', name: '心跳', interval: 800, once: () => {
+    soundTone({ freq: 70, sweep: 40, type: 'sine', dur: 0.1, gain: 0.45 });
+    soundTone({ freq: 60, sweep: 35, type: 'sine', dur: 0.08, gain: 0.35, start: 0.18 });
+  } },
+  { key: 'ufo', emoji: '👽', name: 'UFO', drone: { freq: 440, type: 'sine', gain: 0.2, modFreq: 6, modAmount: 80 } }
 ];
+
+function startDrone({ freq, type = 'sine', gain = 0.3, modFreq = null, modAmount = 0 }) {
+  const ctx = soundCtx();
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  const t = ctx.currentTime;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + 0.05);
+  osc.connect(g).connect(ctx.destination);
+  let lfo, lfoGain;
+  if (modFreq) {
+    lfo = ctx.createOscillator();
+    lfoGain = ctx.createGain();
+    lfo.frequency.value = modFreq;
+    lfoGain.gain.value = modAmount;
+    lfo.connect(lfoGain).connect(osc.frequency);
+    lfo.start();
+  }
+  osc.start();
+  return () => {
+    const now = ctx.currentTime;
+    try {
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(g.gain.value, now);
+      g.gain.linearRampToValueAtTime(0, now + 0.05);
+      osc.stop(now + 0.08);
+      if (lfo) lfo.stop(now + 0.08);
+    } catch (e) {}
+  };
+}
+
+function startLoop(once, intervalMs) {
+  once();
+  const id = setInterval(once, intervalMs);
+  return () => clearInterval(id);
+}
+
+const playingSounds = {};  // key -> stopFn
 
 const soundGrid = document.getElementById('sound-grid');
 SOUND_LIB.forEach(s => {
@@ -3049,7 +3105,17 @@ SOUND_LIB.forEach(s => {
   btn.addEventListener('click', async () => {
     try {
       await ensureAudio();
-      s.play();
+      if (playingSounds[s.key]) {
+        playingSounds[s.key]();
+        delete playingSounds[s.key];
+        btn.classList.remove('playing');
+      } else {
+        let stopFn;
+        if (s.drone) stopFn = startDrone(s.drone);
+        else stopFn = startLoop(s.once, s.interval);
+        playingSounds[s.key] = stopFn;
+        btn.classList.add('playing');
+      }
     } catch (e) { console.error(e); }
   });
   soundGrid.appendChild(btn);
