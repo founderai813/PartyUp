@@ -3635,6 +3635,282 @@ ucEls.playerCard.addEventListener('click', () => {
 });
 
 /* ============================================================
+   COUPLE QUIZ (2-player partner trivia)
+============================================================ */
+const QZ = {
+  PREFIX: 'pu-qz-',
+  peer: null,
+  conn: null,
+  isHost: false,
+  roomName: '',
+  peerId: '',
+  question: '',
+  myAnswer: null,    // submitted answer (string) or null
+  opAnswer: null,
+  score: { match: 0, total: 0 }
+};
+
+const qzEls = {
+  setup: document.getElementById('qz-setup'),
+  roomInput: document.getElementById('qz-room-input'),
+  hostBtn: document.getElementById('qz-host-btn'),
+  joinBtn: document.getElementById('qz-join-btn'),
+  statusRow: document.getElementById('qz-status-row'),
+
+  panel: document.getElementById('qz-panel'),
+  roomname: document.getElementById('qz-roomname'),
+  leave: document.getElementById('qz-leave'),
+  connStatus: document.getElementById('qz-conn-status'),
+
+  share: document.getElementById('qz-share'),
+  shareUrl: document.getElementById('qz-share-url'),
+  copy: document.getElementById('qz-copy'),
+  qr: document.getElementById('qz-qr'),
+  qrCanvas: document.getElementById('qz-qr-canvas'),
+
+  play: document.getElementById('qz-play'),
+  question: document.getElementById('qz-question'),
+  suggest: document.getElementById('qz-suggest'),
+  myAnswer: document.getElementById('qz-my-answer'),
+  submit: document.getElementById('qz-submit'),
+  next: document.getElementById('qz-next'),
+  reveal: document.getElementById('qz-reveal'),
+  score: document.getElementById('qz-score')
+};
+
+const QZ_QUESTIONS = [
+  '你最討厭的食物是？',
+  '你最喜歡的顏色是？',
+  '我們第一次見面是在哪？',
+  '你最想去的國家是？',
+  '我最讓你受不了的習慣是？',
+  '你最近一次哭是什麼時候？',
+  '你最喜歡我哪一點？',
+  '你的童年夢想職業是？',
+  '理想的退休生活是？',
+  '一千萬你會先做什麼？',
+  '我們最難忘的一頓飯是？',
+  '你最害怕的事是？',
+  '你的星座是？（測對方記不記得）',
+  '我們最常吵架的原因是？',
+  '你最想學的技能是？'
+];
+
+function qzToPeerId(n) { return QZ.PREFIX + hashRoomName(n); }
+
+function qzCreatePeer(pid) {
+  return new Promise((resolve, reject) => {
+    const p = new Peer(pid);
+    let opened = false;
+    p.on('open', () => { opened = true; resolve(p); });
+    p.on('error', err => { if (!opened) reject(err); });
+  });
+}
+
+function qzSend(data) {
+  if (QZ.conn && QZ.conn.open) {
+    try { QZ.conn.send(data); } catch (e) {}
+  }
+}
+
+function qzShowShare() {
+  qzEls.share.classList.remove('hidden');
+  qzEls.shareUrl.textContent = location.origin + location.pathname + '#quiz=' + encodeURIComponent(QZ.roomName);
+}
+function qzHideShare() { qzEls.share.classList.add('hidden'); }
+
+function qzShowPlay() {
+  qzEls.play.classList.remove('hidden');
+}
+
+function qzResetRound(keepQuestion = false) {
+  QZ.myAnswer = null;
+  QZ.opAnswer = null;
+  qzEls.reveal.innerHTML = '';
+  qzEls.myAnswer.value = '';
+  qzEls.myAnswer.disabled = false;
+  qzEls.submit.disabled = false;
+  qzEls.submit.textContent = '✅ 送出答案';
+  if (!keepQuestion) qzEls.question.value = '';
+}
+
+function qzMaybeReveal() {
+  if (QZ.myAnswer === null || QZ.opAnswer === null) return;
+  const a = (QZ.myAnswer || '').trim();
+  const b = (QZ.opAnswer || '').trim();
+  const isMatch = a && b && a.toLowerCase() === b.toLowerCase();
+  QZ.score.total++;
+  if (isMatch) QZ.score.match++;
+  qzEls.reveal.innerHTML = `
+    <div class="quiz-banner ${isMatch ? 'match' : 'mismatch'}">
+      ${isMatch ? '🎉 默契滿分！' : '😅 答案不一樣'}
+    </div>
+    <div class="quiz-answer ${isMatch ? 'match' : 'mismatch'}">
+      <div class="who">你的答案</div>${escapeHtml(a)}
+    </div>
+    <div class="quiz-answer ${isMatch ? 'match' : 'mismatch'}">
+      <div class="who">對方答案</div>${escapeHtml(b)}
+    </div>`;
+  qzEls.score.textContent = `默契分數：${QZ.score.match} / ${QZ.score.total}`;
+}
+
+function qzBindConn(conn) {
+  QZ.conn = conn;
+  conn.on('open', () => {
+    setStatus(qzEls.connStatus, '✅ 已連線', 'ok');
+    qzHideShare();
+    qzShowPlay();
+  });
+  conn.on('data', data => {
+    if (!data || !data.type) return;
+    if (data.type === 'question') {
+      qzEls.question.value = data.value || '';
+      qzResetRound(true);
+    } else if (data.type === 'answer') {
+      QZ.opAnswer = data.value;
+      if (QZ.myAnswer !== null) qzMaybeReveal();
+      else setStatus(qzEls.connStatus, '✅ 對方已答，等你送出', 'ok');
+    } else if (data.type === 'next') {
+      qzResetRound(false);
+      setStatus(qzEls.connStatus, '➡️ 下一題', 'ok');
+    }
+  });
+  conn.on('close', () => {
+    setStatus(qzEls.connStatus, '⚠️ 對方離線', 'err');
+  });
+  conn.on('error', err => {
+    setStatus(qzEls.connStatus, '⚠️ ' + err.type, 'err');
+  });
+}
+
+async function qzHost(name) {
+  try {
+    QZ.isHost = true;
+    QZ.roomName = name;
+    QZ.peerId = qzToPeerId(name);
+    setStatus(qzEls.statusRow, '⏳ 開房中...', 'wait');
+    QZ.peer = await qzCreatePeer(QZ.peerId);
+
+    qzEls.setup.classList.add('hidden');
+    qzEls.panel.classList.remove('hidden');
+    qzEls.roomname.textContent = name;
+    qzShowShare();
+    setStatus(qzEls.connStatus, '⏳ 等對方加入...', 'wait');
+
+    QZ.peer.on('connection', conn => qzBindConn(conn));
+  } catch (err) {
+    if (err && err.type === 'unavailable-id') {
+      setStatus(qzEls.statusRow, '⚠️ 房號有人在用，換一個', 'err');
+    } else {
+      setStatus(qzEls.statusRow, '⚠️ 開房失敗：' + (err.type || err.message || err), 'err');
+    }
+    QZ.peer = null;
+  }
+}
+
+async function qzJoin(name) {
+  try {
+    QZ.isHost = false;
+    QZ.roomName = name;
+    QZ.peerId = qzToPeerId(name);
+    setStatus(qzEls.statusRow, '⏳ 連線中...', 'wait');
+    QZ.peer = await qzCreatePeer(QZ.PREFIX + 'g-' + randomCode(6));
+
+    qzEls.setup.classList.add('hidden');
+    qzEls.panel.classList.remove('hidden');
+    qzEls.roomname.textContent = name;
+    setStatus(qzEls.connStatus, '⏳ 連線中...', 'wait');
+    const conn = QZ.peer.connect(QZ.peerId, { reliable: true });
+    qzBindConn(conn);
+  } catch (err) {
+    setStatus(qzEls.statusRow, '⚠️ 加入失敗：' + (err.type || err.message || err), 'err');
+    QZ.peer = null;
+  }
+}
+
+function qzLeave() {
+  try { if (QZ.conn) QZ.conn.close(); } catch (e) {}
+  try { if (QZ.peer) QZ.peer.destroy(); } catch (e) {}
+  QZ.peer = null;
+  QZ.conn = null;
+  QZ.isHost = false;
+  QZ.score = { match: 0, total: 0 };
+  qzEls.setup.classList.remove('hidden');
+  qzEls.panel.classList.add('hidden');
+  qzEls.play.classList.add('hidden');
+  qzHideShare();
+  qzEls.statusRow.innerHTML = '';
+  qzEls.connStatus.innerHTML = '';
+  qzEls.reveal.innerHTML = '';
+  qzEls.score.textContent = '默契分數：0 / 0';
+  qzEls.qrCanvas.classList.add('hidden');
+  if (location.hash.startsWith('#quiz=')) history.replaceState(null, '', '#quiz');
+}
+
+/* Quiz event bindings */
+qzEls.hostBtn.addEventListener('click', () => {
+  const n = qzEls.roomInput.value.trim();
+  if (!n) { setStatus(qzEls.statusRow, '⚠️ 請輸入房號', 'err'); return; }
+  qzHost(n);
+});
+qzEls.joinBtn.addEventListener('click', () => {
+  const n = qzEls.roomInput.value.trim();
+  if (!n) { setStatus(qzEls.statusRow, '⚠️ 請輸入對方給你的房號', 'err'); return; }
+  qzJoin(n);
+});
+qzEls.leave.addEventListener('click', qzLeave);
+
+qzEls.copy.addEventListener('click', async () => {
+  if (await copyToClipboard(qzEls.shareUrl.textContent)) {
+    qzEls.copy.textContent = '✅ 已複製';
+    setTimeout(() => qzEls.copy.textContent = '📋 複製', 1500);
+  }
+});
+qzEls.qr.addEventListener('click', () => {
+  if (qzEls.qrCanvas.classList.contains('hidden')) {
+    QRCode.toCanvas(qzEls.qrCanvas, qzEls.shareUrl.textContent, { width: 180, margin: 1 }, err => {
+      if (!err) qzEls.qrCanvas.classList.remove('hidden');
+    });
+  } else {
+    qzEls.qrCanvas.classList.add('hidden');
+  }
+});
+
+qzEls.suggest.addEventListener('click', () => {
+  const q = QZ_QUESTIONS[Math.floor(Math.random() * QZ_QUESTIONS.length)];
+  qzEls.question.value = q;
+  qzSend({ type: 'question', value: q });
+  qzResetRound(true);
+});
+
+// Sync question typing (debounced)
+let qzQuestionTimer = null;
+qzEls.question.addEventListener('input', () => {
+  clearTimeout(qzQuestionTimer);
+  qzQuestionTimer = setTimeout(() => {
+    qzSend({ type: 'question', value: qzEls.question.value });
+  }, 250);
+});
+
+qzEls.submit.addEventListener('click', () => {
+  if (!qzEls.question.value.trim()) { alert('還沒有題目'); return; }
+  const a = qzEls.myAnswer.value.trim();
+  if (!a) { alert('輸入答案'); return; }
+  QZ.myAnswer = a;
+  qzEls.myAnswer.disabled = true;
+  qzEls.submit.disabled = true;
+  qzEls.submit.textContent = '⏳ 等對方...';
+  qzSend({ type: 'answer', value: a });
+  if (QZ.opAnswer !== null) qzMaybeReveal();
+  else setStatus(qzEls.connStatus, '✅ 已送出，等對方', 'ok');
+});
+
+qzEls.next.addEventListener('click', () => {
+  qzResetRound(false);
+  qzSend({ type: 'next' });
+});
+
+/* ============================================================
    HASH ROUTING
 ============================================================ */
 function applyHash() {
@@ -3663,9 +3939,42 @@ function applyHash() {
     return;
   }
 
-  // 單純 tab 切換：#rps / #draw / #pair / #remote / #home
+  // #vote=<房名>
+  if (hash.startsWith('vote=')) {
+    const roomName = decodeURIComponent(hash.slice(5));
+    if (roomName) {
+      switchTab('vote');
+      voteEls.roomInput.value = roomName;
+      setStatus(voteEls.statusRow, '💡 點「我要投票」加入 ' + roomName, 'wait');
+    }
+    return;
+  }
+
+  // #uc=<房名>
+  if (hash.startsWith('uc=')) {
+    const roomName = decodeURIComponent(hash.slice(3));
+    if (roomName) {
+      switchTab('undercover');
+      ucEls.roomInput.value = roomName;
+      setStatus(ucEls.statusRow, '💡 點「我是玩家」加入 ' + roomName, 'wait');
+    }
+    return;
+  }
+
+  // #quiz=<房名>
+  if (hash.startsWith('quiz=')) {
+    const roomName = decodeURIComponent(hash.slice(5));
+    if (roomName) {
+      switchTab('quiz');
+      qzEls.roomInput.value = roomName;
+      setStatus(qzEls.statusRow, '💡 點「加入」進入 ' + roomName, 'wait');
+    }
+    return;
+  }
+
+  // 單純 tab 切換
   const tabName = hash.split('=')[0];
-  if (['home', 'rps', 'draw', 'pair', 'remote'].includes(tabName)) {
+  if (['home', 'rps', 'draw', 'pair', 'remote', 'vote', 'timer', 'sound', 'undercover', 'quiz'].includes(tabName)) {
     switchTab(tabName);
   }
 }
