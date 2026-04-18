@@ -80,18 +80,27 @@ header {
 /* Tabs */
 nav.tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   padding: 12px 20px;
-  justify-content: center;
+  justify-content: flex-start;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   background: rgba(10, 10, 10, 0.92);
   backdrop-filter: blur(8px);
   z-index: 10;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
 }
+nav.tabs::-webkit-scrollbar { display: none; }
 nav.tabs button {
+  flex: 0 0 auto;
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
@@ -100,6 +109,7 @@ nav.tabs button {
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 nav.tabs button:hover { border-color: var(--accent-1); }
 nav.tabs button.active {
@@ -107,6 +117,13 @@ nav.tabs button.active {
   border-color: transparent;
   color: #000;
   font-weight: bold;
+}
+@media (min-width: 820px) {
+  nav.tabs {
+    justify-content: center;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
 }
 
 /* Main */
@@ -1390,11 +1407,20 @@ const tabs = document.querySelectorAll('nav.tabs button');
 const panels = document.querySelectorAll('.tab-panel');
 
 function switchTab(name) {
-  tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  let activeBtn = null;
+  tabs.forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle('active', on);
+    if (on) activeBtn = b;
+  });
   panels.forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
   if (location.hash.replace('#', '').split('=')[0] !== name) {
     history.replaceState(null, '', '#' + name);
   }
+  if (activeBtn && activeBtn.scrollIntoView) {
+    try { activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); } catch (e) {}
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 tabs.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
