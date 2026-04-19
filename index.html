@@ -3116,68 +3116,7 @@ function startSong(notes, tempo, noteFn = softNote, gain = 0.2) {
 }
 
 const SOUND_LIB = [
-  { key: 'applause', emoji: '👏', name: '掌聲', interval: 320, once: () => {
-    // Layered claps: sharp highpass noise impulses with random spacing
-    for (let i = 0; i < 12; i++) {
-      const ctx = soundCtx();
-      const start = Math.random() * 0.25;
-      const dur = 0.03 + Math.random() * 0.02;
-      const bufSize = Math.max(4, Math.floor(ctx.sampleRate * dur));
-      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let j = 0; j < bufSize; j++) data[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / bufSize, 1.5);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'highpass';
-      filter.frequency.value = 2200 + Math.random() * 1800;
-      filter.Q.value = 0.5;
-      const g = ctx.createGain();
-      const t = ctx.currentTime + start;
-      g.gain.setValueAtTime(0.22 + Math.random() * 0.08, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + dur + 0.01);
-      src.connect(filter).connect(g).connect(ctx.destination);
-      src.start(t);
-      src.stop(t + dur + 0.05);
-    }
-  } },
-  { key: 'drum', emoji: '🥁', name: '鼓點', interval: 480, once: () => {
-    // Punchy kick: sub sine sweep + click transient
-    const ctx = soundCtx();
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'sine';
-    const t = ctx.currentTime;
-    osc.frequency.setValueAtTime(140, t);
-    osc.frequency.exponentialRampToValueAtTime(42, t + 0.08);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.7, t + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-    osc.connect(g).connect(ctx.destination);
-    osc.start(t); osc.stop(t + 0.35);
-    // Transient click
-    soundNoise({ dur: 0.008, gain: 0.25, filterFreq: 4500, filterType: 'highpass', Q: 0.8 });
-  } },
-  { key: 'bell', emoji: '🔔', name: '叮叮', interval: 1500, once: () => {
-    // Church-bell inharmonic partials, long exponential decay
-    const ctx = soundCtx();
-    const base = 880;
-    const ratios = [1, 2.76, 5.4, 8.93];
-    const gains = [0.28, 0.18, 0.1, 0.05];
-    const decays = [2.2, 1.6, 1.1, 0.7];
-    const t = ctx.currentTime;
-    ratios.forEach((r, i) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'sine';
-      o.frequency.value = base * r;
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(gains[i], t + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + decays[i]);
-      o.connect(g).connect(ctx.destination);
-      o.start(t); o.stop(t + decays[i] + 0.1);
-    });
-  } },
+  // === 遊戲反饋 ===
   { key: 'correct', emoji: '✅', name: '答對', interval: 1800, once: () => {
     soundTone({ freq: 523, type: 'triangle', dur: 0.12, gain: 0.3, start: 0 });
     soundTone({ freq: 784, type: 'triangle', dur: 0.25, gain: 0.3, start: 0.12 });
@@ -3185,116 +3124,46 @@ const SOUND_LIB = [
   { key: 'wrong', emoji: '❌', name: '答錯', interval: 1500, once: () => {
     soundTone({ freq: 240, sweep: 100, type: 'sawtooth', dur: 0.35, gain: 0.3 });
   } },
+  { key: 'sad', emoji: '😢', name: '哭哭', interval: 2200, once: () => {
+    [440, 415, 392, 370].forEach((f, i) => soundTone({ freq: f, type: 'triangle', dur: 0.2, gain: 0.25, start: i * 0.2 }));
+  } },
+  { key: 'sadtrombone', emoji: '🎷', name: '傷心小號', song: {
+    // Sad trombone "waa-waa-waa-waaaah" — bending brass tones
+    notes: [['C4',0.7],['B3',0.7],['A#3',0.7],['A3',1.8]],
+    tempo: 90, noteFn: 'brass', gain: 0.18
+  } },
+
+  // === 歡慶 / 登場 ===
   { key: 'fanfare', emoji: '🎉', name: '勝利', song: {
     notes: [['C5',0.5],['E5',0.5],['G5',0.5],['C6',1.5]],
     tempo: 110, noteFn: 'brass', gain: 0.18
   } },
-  { key: 'sad', emoji: '😢', name: '哭哭', interval: 2200, once: () => {
-    [440, 415, 392, 370].forEach((f, i) => soundTone({ freq: f, type: 'triangle', dur: 0.2, gain: 0.25, start: i * 0.2 }));
+  { key: 'tada', emoji: '🎆', name: 'Ta-Da!', song: {
+    notes: [['C5',0.35],['E5',0.35],['G5',0.35],['C6',1.2]],
+    tempo: 130, noteFn: 'brass', gain: 0.2
   } },
-  { key: 'buzz', emoji: '🚫', name: '蜂鳴', interval: 520, once: () => {
-    // Phone busy-signal: short square blip
-    soundTone({ freq: 480, type: 'square', dur: 0.28, gain: 0.18, attack: 0.005, release: 0.02 });
-    soundTone({ freq: 620, type: 'square', dur: 0.28, gain: 0.12, attack: 0.005, release: 0.02, start: 0.002 });
+  { key: 'sparkle', emoji: '✨', name: '閃亮', song: {
+    // Ascending arpeggio like a magic wand
+    notes: [['C5',0.2],['E5',0.2],['G5',0.2],['C6',0.2],['E6',0.6]],
+    tempo: 160, noteFn: 'soft', gain: 0.22
   } },
-  { key: 'siren', emoji: '🚨', name: '警報', interval: 520, once: () => {
-    // Two-tone police siren: hi / lo alternating every call
-    const hi = 820, lo = 560;
-    soundTone({ freq: hi, type: 'sine', dur: 0.24, gain: 0.22, attack: 0.02, release: 0.04 });
-    soundTone({ freq: lo, type: 'sine', dur: 0.24, gain: 0.22, attack: 0.02, release: 0.04, start: 0.26 });
+  { key: 'doorbell', emoji: '🔔', name: '叮咚', song: {
+    // 2-note door chime
+    notes: [['E5',0.5],['C5',1.2]],
+    tempo: 110, noteFn: 'soft', gain: 0.26
   } },
-  { key: 'chime', emoji: '🎐', name: '風鈴', interval: 1100, once: () => {
-    // Random metallic wind-chime, bell-like inharmonic partials, soft
-    const ctx = soundCtx();
-    const bases = [1174, 1397, 1760, 2093, 2637];
-    const base = bases[Math.floor(Math.random() * bases.length)];
-    const ratios = [1, 2.76, 5.4];
-    const gains = [0.16, 0.09, 0.04];
-    const t = ctx.currentTime;
-    ratios.forEach((r, i) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'sine';
-      o.frequency.value = base * r;
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(gains[i], t + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
-      o.connect(g).connect(ctx.destination);
-      o.start(t); o.stop(t + 1.7);
-    });
+  { key: 'herald', emoji: '🎺', name: '登場', song: {
+    // Trumpet entrance call
+    notes: [['G4',0.3],['C5',0.3],['E5',0.3],['G5',1]],
+    tempo: 120, noteFn: 'brass', gain: 0.19
   } },
-  { key: 'pop', emoji: '💥', name: 'Pop', interval: 400, once: () => {
-    // Bubble pop: quick pitch drop with click
-    const ctx = soundCtx();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'sine';
-    const t = ctx.currentTime;
-    o.frequency.setValueAtTime(1500 + Math.random() * 500, t);
-    o.frequency.exponentialRampToValueAtTime(200, t + 0.08);
-    g.gain.setValueAtTime(0.35, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-    o.connect(g).connect(ctx.destination);
-    o.start(t); o.stop(t + 0.12);
+  { key: 'suspense', emoji: '🥁', name: '登登登', song: {
+    // Suspense drum roll sting (low notes + high resolve)
+    notes: [['G3',0.3],['G3',0.3],['G3',0.3],['C5',1.2]],
+    tempo: 110, noteFn: 'brass', gain: 0.22
   } },
-  { key: 'laser', emoji: '🛸', name: '雷射', interval: 650, once: () => {
-    // Sci-fi pew: sine sweep from very high down, slight noise tail
-    const ctx = soundCtx();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'sine';
-    const t = ctx.currentTime;
-    o.frequency.setValueAtTime(2400, t);
-    o.frequency.exponentialRampToValueAtTime(180, t + 0.25);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.25, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-    o.connect(g).connect(ctx.destination);
-    o.start(t); o.stop(t + 0.3);
-  } },
-  { key: 'scream', emoji: '😱', name: '慘叫', interval: 2200, once: () => {
-    // Vocal-ish scream: sawtooth + formant-band filters (vowel "a")
-    const ctx = soundCtx();
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'sawtooth';
-    const t = ctx.currentTime;
-    osc.frequency.setValueAtTime(500, t);
-    osc.frequency.exponentialRampToValueAtTime(950, t + 0.12);
-    osc.frequency.exponentialRampToValueAtTime(420, t + 0.85);
-    const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 800; f1.Q.value = 4;
-    const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1300; f2.Q.value = 6;
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.22, t + 0.05);
-    g.gain.setValueAtTime(0.22, t + 0.7);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 1);
-    osc.connect(f1).connect(g).connect(ctx.destination);
-    osc.connect(f2).connect(g);
-    osc.start(t);
-    osc.stop(t + 1.05);
-  } },
-  { key: 'heartbeat', emoji: '💓', name: '心跳', interval: 900, once: () => {
-    // Deep sub kick twice
-    const ctx = soundCtx();
-    const beat = (offset) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'sine';
-      const t = ctx.currentTime + offset;
-      o.frequency.setValueAtTime(90, t);
-      o.frequency.exponentialRampToValueAtTime(38, t + 0.12);
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.65, t + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-      o.connect(g).connect(ctx.destination);
-      o.start(t); o.stop(t + 0.3);
-    };
-    beat(0);
-    beat(0.22);
-  } },
-  { key: 'ufo', emoji: '👽', name: 'UFO', drone: { freq: 330, type: 'sine', gain: 0.18, modFreq: 5.5, modAmount: 110 } },
 
-  // 完整歌曲（自動循環）
+  // === 完整曲 ===
   { key: 'birthday', emoji: '🎂', name: '生日快樂', song: {
     notes: [
       ['G4',0.75],['G4',0.25],['A4',1],['G4',1],['C5',1],['B4',2],
