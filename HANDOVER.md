@@ -1,52 +1,95 @@
-# PartyUp 專案交接文件
+# PartyUp 開發進度交接
 
-## 目前完成的事情
+> 詳細的專案介紹見 [README.md](README.md)，技術能力盤點見 [SKILLS.md](SKILLS.md)。本檔案只記**還沒做、可以做**的事。
 
-### 已上線（已 merge 到 main，GitHub Pages 部署中）
+---
 
-| 頁面 | 網址 | 功能 |
+## ✅ 已完成（已部署）
+
+| Tab | 狀態 | 重點 |
 |---|---|---|
-| 首頁 | `futurestarai.com` | JoinUp + PartyUp 兩個入口 |
-| PartyUp hub | `futurestarai.com/partyup/` | 工具集線頁（6 張卡片）|
-| 遠端猜拳 | `futurestarai.com/rps/` | PeerJS P2P 對戰、計分、再戰 |
-| 抽籤 | `futurestarai.com/draw/` | 3 個分頁：一般 / 配對 / 遠端同步 |
+| 🏠 首頁 | ✅ | 9 張卡片導覽 |
+| ✊ 猜拳 | ✅ | P2P 對戰、計分、自訂房號 |
+| 🎲 抽籤 | ✅ | 多名單、加權（±按鈕）、3 模式、排除歷史 |
+| 💘 配對 | ✅ | 一對一 / A 配 B / 秘密聖誕老人 |
+| 📡 遠端同步 | ✅ | 主持人抽、多觀眾同步看 |
+| 🗳️ 投票 | ✅ | 即時長條圖、主持人關閉投票 |
+| ⏱️ 計時 | ✅ | 預設值、紅色脈動、嗶嗶聲 |
+| 🔊 音效 | ✅ | 12 個旋律類音效（單音效獨佔） |
+| 🕵️ 臥底 | ✅ | 誰是臥底 / 自訂角色（狼人殺通用） |
+| 💞 默契 | ✅ | 兩人同題、揭曉、累計分數 |
 
-### 抽籤頁完成的功能
+---
 
-- 多名單管理（儲存/切換/重命名/刪除）
-- 加權語法（`王小明 x3`）
-- 抽 N 個不重複 / 可重複 / 分 N 組
-- 抽過排除歷史紀錄
-- 配對抽籤（一對一 / A-gets-B / 秘密聖誕老人）
-- 遠端同步抽籤（PeerJS host → 多觀眾同步看）
-- QR 分享結果
-- spinReveal 動畫
+## ⚠️ 部署狀態
 
-### 品牌建立
+| 項目 | 狀態 |
+|---|---|
+| GitHub Pages | ✅ 已啟用（從 claude 分支發佈） |
+| 自訂網域 `partyup.futurestarai.com` | 🟡 等 DNS 設定 |
+| GitHub 直接網址 `founderai813.github.io/partyup` | ✅ 可用 |
 
-- PartyUp 子品牌命名 + 漸層 LOGO
-- 所有頁面 title / header / footer 統一品牌
-- 連結指向 `partyup.futurestarai.com`（子網域尚未設定）
+### DNS 還沒完成的步驟
+1. Cloudflare → DNS → Add record：CNAME `partyup` → `founderai813.github.io`（灰色雲）
+2. 等 5–30 分鐘 DNS 傳播
+3. GitHub Pages 設定頁 → Enforce HTTPS 變可勾 → 勾
 
-## 接下來要做的事
+---
 
-### 1. 合併成一頁（你剛要求的，正在做）
+## 🛠 未來可做（待規劃）
 
-把猜拳、抽籤、配對、遠端同步全部放在 `/partyup/index.html` 一頁裡，用分頁切換，不用跳來跳去。
+### 工具擴充
+- [ ] **開團上傳照片**（最近被打斷的需求）：開房間時可上傳 3 張圖片給觀眾看
+- [ ] **遠端同步抽籤加上加權**：目前遠端 tab 抽籤是平均機率
+- [ ] **PWA**：加入主畫面、離線使用
+- [ ] **匯出 CSV / 截圖**：投票結果、抽籤結果
 
-**狀態**：已建好新分支 `claude/all-in-one-partyup`，尚未開始寫。
+### 新工具
+- [ ] **你畫我猜**：畫布 P2P 同步
+- [ ] **OX / 四子棋**：兩人棋盤
+- [ ] **Bingo 賓果**：自訂卡片 + 答題
+- [ ] **快速搶答按鈕**：誰先按誰回答
 
-### 2. PartyUp 子網域（可選，之後再弄）
+### 音效
+- [ ] 嵌入 base64 音檔，補上純合成做不像的（真鼓 / 真掌聲 / 真警報）
 
-- 建 GitHub repo `PartyUp`（已建，但還是空的）
-- 推送 hub 頁面 + CNAME
-- Cloudflare DNS 加 CNAME 記錄
-- 你說看不懂，這部分先跳過也不影響功能
+### UX
+- [ ] 淺色 / 深色模式切換
+- [ ] tab 拆「遊戲類」vs「工具類」兩組
+- [ ] 手機 bottom nav
 
-### 3. 未來可擴充的功能（做完合一頁後再問你）
+---
 
-- 即時投票（VoteUp）
-- 倒數計時器
-- 音效 / confetti 慶祝動畫
-- 暗號模式（秘密聖誕老人每人只看自己的配對）
-- 匯出 CSV / 圖片
+## 📂 重要檔案
+
+- `index.html` — 整個 app（~3400 行）
+- `CNAME` — `partyup.futurestarai.com`
+- `README.md` — 專案首頁（GitHub 顯示）
+- `SKILLS.md` — 技能盤點
+- 本檔（HANDOVER.md）— 你正在看
+
+---
+
+## 🔑 LocalStorage Keys
+
+```
+partyup.draw.lists         # 多名單陣列
+partyup.draw.current       # 當前名單 ID
+partyup.draw.history       # 已抽過的人名
+partyup.draw.exclude       # 排除歷史開關
+partyup.pair.a / b / people / mode   # 配對輸入
+```
+
+---
+
+## 🎨 PeerJS ID 命名空間
+
+| 工具 | Prefix |
+|---|---|
+| 猜拳 | `pu-rps-` |
+| 遠端抽籤 | `pu-rm-` |
+| 投票 | `pu-vote-` |
+| 臥底 | `pu-uc-` |
+| 默契 | `pu-qz-` |
+
+全部用 `djb2(房名)` 轉合法 ID，所以使用者可以打中文 / emoji。
